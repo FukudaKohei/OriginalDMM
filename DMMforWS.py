@@ -1,9 +1,11 @@
 import argparse
 import logging
 import time
+import datetime
 from os.path import exists
 
 import numpy as np
+import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -16,7 +18,20 @@ from pyro.distributions import TransformedDistribution
 from pyro.distributions.transforms import affine_autoregressive
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO, TraceEnum_ELBO, TraceTMC_ELBO, config_enumerate
 from pyro.optim import ClippedAdam
-#あ
+
+import mido
+from mido import Message, MidiFile, MidiTrack, MetaMessage
+
+from midi2audio import FluidSynth
+
+import pretty_midi
+from scipy.io import wavfile
+
+import wave
+from scipy.io.wavfile import write
+import fluidsynth
+
+
 class Emitter(nn.Module):
     """
     Parameterizes the bernoulli observation likelihood `p(x_t | z_t)`
@@ -40,6 +55,7 @@ class Emitter(nn.Module):
         h2 = self.relu(self.lin_hidden_to_hidden(h1))
         ps = torch.sigmoid(self.lin_hidden_to_input(h2))
         return ps
+
 class GatedTransition(nn.Module):
     """
     Parameterizes the gaussian latent transition probability `p(z_t | z_{t-1})`
@@ -83,6 +99,7 @@ class GatedTransition(nn.Module):
         scale = self.softplus(self.lin_sig(self.relu(proposed_mean)))
         # return loc, scale which can be fed into Normal
         return loc, scale
+
 class Combiner(nn.Module):
     """
     Parameterizes `q(z_t | z_{t-1}, x_{t:T})`, which is the basic building block
@@ -114,6 +131,7 @@ class Combiner(nn.Module):
         scale = self.softplus(self.lin_hidden_to_scale(h_combined))
         # return loc, scale which can be fed into Normal
         return loc, scale
+
 class DMM(nn.Module):
     
     """
@@ -123,7 +141,7 @@ class DMM(nn.Module):
 
     def __init__(self, input_dim=88, z_dim=100, emission_dim=100,
                  transition_dim=200, rnn_dim=600, num_layers=1, rnn_dropout_rate=0.1,
-                 num_iafs=0, iaf_dim=50, use_cuda=False):
+                 num_iafs=0, iaf_dim=50, use_cuda=False, rnn_check=False, rpt=True):
         super().__init__()
         # instantiate PyTorch modules used in the model and guide below
         self.emitter = Emitter(input_dim, z_dim, emission_dim)
@@ -152,6 +170,9 @@ class DMM(nn.Module):
         if use_cuda:
             self.cuda()
 
+        self.rnn_check = rnn_check
+        self.rpt = rpt
+
     def forward(self, mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths, annealing_factor=1.0):
 
         # this is the number of time steps we need to process in the mini-batch
@@ -165,15 +186,16 @@ class DMM(nn.Module):
         # push the observed x's through the rnn;
         # rnn_output contains the hidden state at each time step
         rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
-        if any(torch.isnan(rnn_output.data.reshape(-1))):
-            print("rnn_output First")
-            # print(self.rnn.state_dict().items())
-            print(rnn_output)
-            torch.save(rnn_output, "out")
-            torch.save(self.rnn.state_dict().items, "dic")
-            torch.save(mini_batch_reversed, "mini_batch_reversed")
-            torch.save(h_0_contig, "h_0_contig")
-            assert False
+        if rnn_check:
+            if any(torch.isnan(rnn_output.data.reshape(-1))):
+                # print("rnn_output First")
+                # print(self.rnn.state_dict().items())
+                # print(rnn_output)
+                # torch.save(rnn_output, "out")
+                # torch.save(self.rnn.state_dict().items, "dic")
+                # torch.save(mini_batch_reversed, "mini_batch_reversed")
+                # torch.save(h_0_contig, "h_0_contig")
+                assert False
 
         # reverse the time-ordering in the hidden state and un-pack it
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
@@ -208,13 +230,22 @@ class DMM(nn.Module):
             # No Reparameterization Trick
             x = emission_probs_t
 
-                # the latent sampled at this time step will be conditioned upon
+            #Reparameterization Trick
+            if rpt : 
+                eps = torch.rand(88)
+                # assert len(emission_probs_t) == 88
+                appxm = torch.log(eps + rpt_eps) - torch.log(1-eps + rpt_eps) + torch.log(x + rpt_eps) - torch.log(1-x + rpt_eps)
+                # appxm = torch.log(eps) - torch.log(1-eps) + torch.log(x) - torch.log(1-x)
+                x = torch.sigmoid(appxm)
+
+            # the latent sampled at this time step will be conditioned upon
             # in the next time step so keep track of it
             z_prev = z_t
             x_container.append(x)
 
         x_container = torch.stack(x_container)
         return x_container.transpose(0,1)
+
 class WGAN_network(nn.Module):
     def __init__(self, hiddden_dim=256):
         super().__init__()
@@ -242,12 +273,13 @@ class WGAN_network(nn.Module):
         # if torch.isnan(-(torch.mean(outputs_real) - torch.mean(outputs_fake))):
         #     print("OUTPUT")
         return -(torch.mean(outputs_real) - torch.mean(outputs_fake))
+
 class WassersteinLoss():
     def __init__(self, WGAN_network, N_loops=5, lr=0.00001):
         self.WGAN_network = WGAN_network
         self.D = self.WGAN_network.D
-        # self.optimizer = torch.optim.RMSprop(self.D.parameters(), lr=lr)
-        self.optimizer = torch.optim.Adam(self.D.parameters(), lr=lr)
+        self.optimizer = torch.optim.RMSprop(self.D.parameters(), lr=lr)
+        # self.optimizer = torch.optim.Adam(self.D.parameters(), lr=lr)
         # the number of loops of calculation of Wass
         self.N_loops = N_loops
 
@@ -290,36 +322,60 @@ class WassersteinLoss():
         # Wass is positive
         return -loss
 
-def main():
-    ## args
-    num_epochs=5000
-    learning_rate=0.0003
-    beta1=0.96
-    beta2=0.999
-    clip_norm=10.0
-    lr_decay=0.99996
-    mini_batch_size=20
-    annealing_epochs=1000
-    minimum_annealing_factor=0.2
-    rnn_dropout_rate=0.1
-    num_iafs=0
-    iaf_dim=100
-    checkpoint_freq=0
-    load_opt=''
-    load_model=''
-    save_opt=''
-    save_model=''
-    cuda=True
-    jit=False
-    tmc=False
-    tmcelbo=False
-    tmc_num_samples=10
-    log='dmm.log'
+
+def main(args):
+
+    ## ドドド、レレレ、ミミミ、ドレミ
+    def easyTones():
+        training_seq_lengths = torch.tensor([8]*10)
+        training_data_sequences = torch.zeros(10,8,88)
+        for i in range(5):
+            for j in range(8):
+                training_data_sequences[i][j][int(20+i*10)] = 1
+        for i in range(5,8):
+            training_data_sequences[i][0][int(110-i*10)  ] = 1
+            training_data_sequences[i][1][int(110-i*10)+2] = 1
+            training_data_sequences[i][2][int(110-i*10)+2] = 1
+            training_data_sequences[i][3][int(110-i*10)+1] = 1
+            training_data_sequences[i][4][int(110-i*10)+2] = 1
+            training_data_sequences[i][5][int(110-i*10)+2] = 1
+            training_data_sequences[i][6][int(110-i*10)+2] = 1
+            training_data_sequences[i][7][int(110-i*10)+1] = 1
+        return training_seq_lengths, training_data_sequences
+    ## ドドド、レレレ
+    def superEasyTones():
+        training_seq_lengths = torch.tensor([8]*10)
+        training_data_sequences = torch.zeros(10,8,88)
+        for i in range(10):
+            for j in range(8):
+                training_data_sequences[i][j][int(20+i*10)] = 1
+        return training_seq_lengths, training_data_sequences
+    ## ドドド、ドドド、ドドド
+    def easiestTones():
+        training_seq_lengths = torch.tensor([8]*10)
+        training_data_sequences = torch.zeros(10,8,88)
+        for i in range(10):
+            for j in range(8):
+                training_data_sequences[i][j][int(70)] = 1
+        return training_seq_lengths, training_data_sequences
+    # rep is short for "repeat"
+    # which means how many times we use certain sample to do validation/test evaluation during training
+    def rep(x):
+            rep_shape = torch.Size([x.size(0) * n_eval_samples]) + x.size()[1:]
+            repeat_dims = [1] * len(x.size())
+            repeat_dims[0] = n_eval_samples
+            return x.repeat(repeat_dims).reshape(n_eval_samples, -1).transpose(1, 0).reshape(rep_shape)
+
 
     ## 長さ最長129、例えば長さが60のやつは61~129はすべて0データ
     data = poly.load_data(poly.JSB_CHORALES)
     training_seq_lengths = data['train']['sequence_lengths']
     training_data_sequences = data['train']['sequences']
+
+    ## 一番簡単
+    training_seq_lengths, training_data_sequences = easiestTones()
+
+
     test_seq_lengths = data['test']['sequence_lengths']
     test_data_sequences = data['test']['sequences']
     val_seq_lengths = data['valid']['sequence_lengths']
@@ -335,14 +391,6 @@ def main():
     # the number of samples we use to do the evaluation
     n_eval_samples = 1
 
-    # rep is short for "repeat"
-    # which means how many times we use certain sample to do validation/test evaluation during training
-    def rep(x):
-            rep_shape = torch.Size([x.size(0) * n_eval_samples]) + x.size()[1:]
-            repeat_dims = [1] * len(x.size())
-            repeat_dims[0] = n_eval_samples
-            return x.repeat(repeat_dims).reshape(n_eval_samples, -1).transpose(1, 0).reshape(rep_shape)
-
     # get the validation/test data ready for the dmm: pack into sequences, etc.
     val_seq_lengths = rep(val_seq_lengths)
     test_seq_lengths = rep(test_seq_lengths)
@@ -355,16 +403,19 @@ def main():
 
 
 
-    dmm = DMM(use_cuda=cuda)
+    dmm = DMM(use_cuda=args.cuda, rnn_check=args.rnn_check, rpt=args.reparameterization)
     WN = WGAN_network()
-    W = WassersteinLoss(WN)
+    W = WassersteinLoss(WN, N_loops=args.N_loops, lr=args.w_learning_rate)
 
     # Create optimizer algorithm
-    optimizer = optim.Adam(dmm.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate)
     # Add learning rate scheduler
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999)
 
-    num_epochs = 100
+    # make directory for Data
+    now = datetime.datetime.now().strftime('%Y%m%d_%H_%M')
+    os.makedirs(os.path.join("saveData", now), exist_ok=True)
+
     #######################
     #### TRAINING LOOP ####
     #######################
@@ -423,11 +474,41 @@ def main():
             print("        loss : %f " % epoch_nll)
             torch.save(dmm.to("cpu").state_dict(), "DMM_dic")
 
+# parse command-line arguments and execute the main method
 if __name__ == '__main__':
-    main()
+    # assert pyro.__version__.startswith('1.5.1')
 
+    parser = argparse.ArgumentParser(description="parse args")
+    parser.add_argument('-n', '--num-epochs', type=int, default=5000)
+    parser.add_argument('-lr', '--learning-rate', type=float, default=0.0003)
+    parser.add_argument('-wlr', '--w-learning-rate', type=float, default=0.00001)
+    parser.add_argument('-nls', '--N-loops', type=int, default=5)
+    parser.add_argument('-rpt', '--reparameterization', action='store_true')
+    parser.add_argument('-b1', '--beta1', type=float, default=0.96)
+    parser.add_argument('-b2', '--beta2', type=float, default=0.999)
+    parser.add_argument('-cn', '--clip-norm', type=float, default=10.0)
+    parser.add_argument('-lrd', '--lr-decay', type=float, default=0.99996)
+    parser.add_argument('-wd', '--weight-decay', type=float, default=2.0)
+    parser.add_argument('-mbs', '--mini-batch-size', type=int, default=20)
+    parser.add_argument('-ae', '--annealing-epochs', type=int, default=1000)
+    parser.add_argument('-maf', '--minimum-annealing-factor', type=float, default=0.2)
+    parser.add_argument('-rdr', '--rnn-dropout-rate', type=float, default=0.1)
+    parser.add_argument('-iafs', '--num-iafs', type=int, default=0)
+    parser.add_argument('-id', '--iaf-dim', type=int, default=100)
+    parser.add_argument('-cf', '--checkpoint-freq', type=int, default=0)
+    parser.add_argument('-lopt', '--load-opt', type=str, default='')
+    parser.add_argument('-lmod', '--load-model', type=str, default='')
+    parser.add_argument('-sopt', '--save-opt', type=str, default='')
+    parser.add_argument('-smod', '--save-model', type=str, default='')
+    parser.add_argument('--cuda', action='store_true')
+    parser.add_argument('--jit', action='store_true')
+    parser.add_argument('--tmc', action='store_true')
+    parser.add_argument('--tmcelbo', action='store_true')
+    parser.add_argument('--tmc-num-samples', default=10, type=int)
+    parser.add_argument('-l', '--log', type=str, default='dmm.log')
+    args = parser.parse_args()
 
-
+    main(args)
 
 
 
