@@ -3,6 +3,7 @@ import logging
 import time
 import datetime
 from os.path import exists
+import os
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,7 +30,7 @@ from scipy.io import wavfile
 
 import wave
 from scipy.io.wavfile import write
-import fluidsynth
+# import fluidsynth
 
 
 class Emitter(nn.Module):
@@ -186,7 +187,7 @@ class DMM(nn.Module):
         # push the observed x's through the rnn;
         # rnn_output contains the hidden state at each time step
         rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
-        if rnn_check:
+        if self.rnn_check:
             if any(torch.isnan(rnn_output.data.reshape(-1))):
                 # print("rnn_output First")
                 # print(self.rnn.state_dict().items())
@@ -231,8 +232,9 @@ class DMM(nn.Module):
             x = emission_probs_t
 
             #Reparameterization Trick
-            if rpt : 
+            if self.rpt : 
                 eps = torch.rand(88)
+                rpt_eps = 1e-20
                 # assert len(emission_probs_t) == 88
                 appxm = torch.log(eps + rpt_eps) - torch.log(1-eps + rpt_eps) + torch.log(x + rpt_eps) - torch.log(1-x + rpt_eps)
                 # appxm = torch.log(eps) - torch.log(1-eps) + torch.log(x) - torch.log(1-x)
@@ -366,6 +368,47 @@ def main(args):
             repeat_dims[0] = n_eval_samples
             return x.repeat(repeat_dims).reshape(n_eval_samples, -1).transpose(1, 0).reshape(rep_shape)
 
+    ## This func is for saving losses at final
+    def saveGraph(loss_list, now):
+        FS = 10
+        fig = plt.figure()
+        plt.rcParams["font.size"] = FS
+        plt.plot(loss_list)
+        plt.title("Wasserstein Loss")
+        plt.xlabel("epoch", fontsize=FS)
+        plt.ylabel("loss", fontsize=FS)
+        fig.savefig(os.path.join("saveData", now, "LOSS.png"))
+
+    ## This func is for save generatedTones and trainingTones as MIDI
+    def save_as_midi(song, path="", name="default.mid", BPM = 120, velocity = 100):
+        pm = pretty_midi.PrettyMIDI(resolution=960, initial_tempo=BPM) #pretty_midiオブジェクトを作ります
+        instrument = pretty_midi.Instrument(0) #instrumentはトラックみたいなものです。
+        for i,tones in enumerate(song):
+            which_tone = (tones == 1).nonzero().reshape(-1)
+            print(which_tone)
+            if len(which_tone) == 0:
+                note = pretty_midi.Note(velocity=0, pitch=0, start=i, end=i+1) #noteはNoteOnEventとNoteOffEventに相当します。
+                instrument.notes.append(note)
+            else:
+                for which in which_tone:
+                    note = pretty_midi.Note(velocity=velocity, pitch=int(which), start=i, end=i+1) #noteはNoteOnEventとNoteOffEventに相当します。
+                    instrument.notes.append(note)
+        pm.instruments.append(instrument)
+        pm.write(os.path.join(path, name)) #midiファイルを書き込みます。
+
+    # generate Xs
+    def generate_Xs(dmm, mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths):
+        songs_list = []
+        generated_mini_batch = dmm(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths)
+        for i, song in enumerate(generated_mini_batch):
+            tones_container = []
+            for time in range(mini_batch_seq_lengths[i]):
+                p = dist.Bernoulli(probs=song[time])
+                tone = p.sample()
+                tones_container.append(tone)
+            tones_container = torch.stack(tones_container)
+            songs_list.append([tones_container])
+        return songs_list
 
     ## 長さ最長129、例えば長さが60のやつは61~129はすべて0データ
     data = poly.load_data(poly.JSB_CHORALES)
@@ -382,8 +425,8 @@ def main(args):
     val_data_sequences = data['valid']['sequences']
     N_train_data = len(training_seq_lengths)
     N_train_time_slices = float(torch.sum(training_seq_lengths))
-    N_mini_batches = int(N_train_data / mini_batch_size +
-                        int(N_train_data % mini_batch_size > 0))
+    N_mini_batches = int(N_train_data / args.mini_batch_size +
+                        int(N_train_data % args.mini_batch_size > 0))
 
 
     # how often we do validation/test evaluation during training
@@ -396,14 +439,14 @@ def main(args):
     test_seq_lengths = rep(test_seq_lengths)
     val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
         torch.arange(n_eval_samples * val_data_sequences.shape[0]), rep(val_data_sequences),
-        val_seq_lengths, cuda=cuda)
+        val_seq_lengths, cuda=args.cuda)
     test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
         torch.arange(n_eval_samples * test_data_sequences.shape[0]), rep(test_data_sequences),
-        test_seq_lengths, cuda=cuda)
+        test_seq_lengths, cuda=args.cuda)
 
 
 
-    dmm = DMM(use_cuda=args.cuda, rnn_check=args.rnn_check, rpt=args.reparameterization)
+    dmm = DMM(use_cuda=args.cuda, rnn_check=args.rck, rpt=args.rpt)
     WN = WGAN_network()
     W = WassersteinLoss(WN, N_loops=args.N_loops, lr=args.w_learning_rate)
 
@@ -420,7 +463,8 @@ def main(args):
     #### TRAINING LOOP ####
     #######################
     times = [time.time()]
-    for epoch in range(num_epochs):
+    losses = []
+    for epoch in range(args.num_epochs):
         epoch_nll = 0
         shuffled_indices = torch.randperm(N_train_data)
         # print("Proceeding: %.2f " % (epoch*100/5000) + "%")
@@ -429,14 +473,14 @@ def main(args):
         for which_mini_batch in range(N_mini_batches):
 
             # compute which sequences in the training set we should grab
-            mini_batch_start = (which_mini_batch * mini_batch_size)
-            mini_batch_end = np.min([(which_mini_batch + 1) * mini_batch_size, N_train_data])
+            mini_batch_start = (which_mini_batch * args.mini_batch_size)
+            mini_batch_end = np.min([(which_mini_batch + 1) * args.mini_batch_size, N_train_data])
             mini_batch_indices = shuffled_indices[mini_batch_start:mini_batch_end]
 
             # grab a fully prepped mini-batch using the helper function in the data loader
             mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths \
                 = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
-                                        training_seq_lengths, cuda=cuda)
+                                        training_seq_lengths, cuda=args.cuda)
 
             # reset gradients
             optimizer.zero_grad()
@@ -450,7 +494,7 @@ def main(args):
             #     assert False
             # NaN_detect(WN, epoch, message="calc_Before")
             # calculate loss
-            loss = W.calc(test_batch, generated_mini_batch)
+            loss = W.calc(mini_batch, generated_mini_batch)
             # NaN_detect(WN, epoch, message="calc_After")
 
             # NaN_detect(dmm, epoch, message="step_Before")        
@@ -458,21 +502,29 @@ def main(args):
             loss.backward()
             optimizer.step()
             scheduler.step()
-            for p in dmm.rnn.parameters():
-                p.data.clamp_(-0.01, 0.01)
+            if args.rnn_clip != None:
+                for p in dmm.rnn.parameters():
+                    p.data.clamp_(-args.rnn_clip, args.rnn_clip)
+                    # p.data.clamp_(-0.01, 0.01)
             # NaN_detect(dmm, epoch, message="step_After")        
 
             epoch_nll += loss
         
         # report training diagnostics
         times.append(time.time())
+        losses.append(epoch_nll)
         epoch_time = times[-1] - times[-2]
         # logging.info("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
         #                 (epoch, epoch_nll / N_train_time_slices, epoch_time))
-        if epoch % 10 = 0:
+        if epoch % 10 == 0:
             print("epoch %d time : %d sec" % (epoch, int(epoch_time)))
             print("        loss : %f " % epoch_nll)
-            torch.save(dmm.to("cpu").state_dict(), "DMM_dic")
+        
+        if epoch % args.checkpoint_freq == 0:
+            a =1
+        if epoch == args.num_epochs-1:
+            saveGraph(losses, now)
+
 
 # parse command-line arguments and execute the main method
 if __name__ == '__main__':
@@ -483,7 +535,9 @@ if __name__ == '__main__':
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.0003)
     parser.add_argument('-wlr', '--w-learning-rate', type=float, default=0.00001)
     parser.add_argument('-nls', '--N-loops', type=int, default=5)
-    parser.add_argument('-rpt', '--reparameterization', action='store_true')
+    parser.add_argument('--rpt', action='store_true')
+    parser.add_argument('-rcl', '--rnn-clip', type=float, default=None)
+    parser.add_argument('--rck', action='store_true')
     parser.add_argument('-b1', '--beta1', type=float, default=0.96)
     parser.add_argument('-b2', '--beta2', type=float, default=0.999)
     parser.add_argument('-cn', '--clip-norm', type=float, default=10.0)
