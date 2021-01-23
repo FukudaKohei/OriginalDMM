@@ -407,10 +407,11 @@ def main(args):
                 tone = p.sample()
                 tones_container.append(tone)
             tones_container = torch.stack(tones_container)
-            songs_list.append([tones_container])
+            songs_list.append(tones_container)
         return songs_list
 
     def saveSongs(songs_list, mini_batch, N_songs, path):
+        # print(len(songs_list[0][0]))
         if len(songs_list) != len(mini_batch):
             assert False
         if N_songs <= len(songs_list):
@@ -427,7 +428,13 @@ def main(args):
     training_seq_lengths = data['train']['sequence_lengths']
     training_data_sequences = data['train']['sequences']
 
-    ## 一番簡単
+    ## ドドド、レレレ、ミミミ、ドレミ
+    training_seq_lengths, training_data_sequences = easyTones()
+
+    ## ドドド、レレレ
+    training_seq_lengths, training_data_sequences = superEasyTones()
+
+    ## ドドドのみ
     training_seq_lengths, training_data_sequences = easiestTones()
 
 
