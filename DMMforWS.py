@@ -351,7 +351,7 @@ def main(args):
         training_data_sequences = torch.zeros(10,8,88)
         for i in range(10):
             for j in range(8):
-                training_data_sequences[i][j][int(20+i*10)] = 1
+                training_data_sequences[i][j][int(30+i*5)] = 1
         return training_seq_lengths, training_data_sequences
     ## ドドド、ドドド、ドドド
     def easiestTones():
@@ -428,14 +428,14 @@ def main(args):
     training_seq_lengths = data['train']['sequence_lengths']
     training_data_sequences = data['train']['sequences']
 
-    ## ドドド、レレレ、ミミミ、ドレミ
-    training_seq_lengths, training_data_sequences = easyTones()
+    # ## ドドド、レレレ、ミミミ、ドレミ
+    # training_seq_lengths, training_data_sequences = easyTones()
 
     ## ドドド、レレレ
     training_seq_lengths, training_data_sequences = superEasyTones()
 
     ## ドドドのみ
-    training_seq_lengths, training_data_sequences = easiestTones()
+    # training_seq_lengths, training_data_sequences = easiestTones()
 
 
     test_seq_lengths = data['test']['sequence_lengths']
