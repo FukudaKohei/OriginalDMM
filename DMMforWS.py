@@ -1,6 +1,7 @@
 import argparse
 import logging
 import time
+import random
 import datetime
 from os.path import exists
 import os
@@ -288,7 +289,7 @@ class WassersteinLoss():
 
     def calc(self, train_mini_batch, generated_mini_batch):
         # vanish grad_fn of DMM's parameters
-        no_grad_generated_mini_batch = torch.tensor(generated_mini_batch)
+        no_grad_generated_mini_batch = generated_mini_batch.clone().detach()
 
         # activate grad_fn of Wass calculator's parameters 
         for p in self.D.parameters():
@@ -385,7 +386,6 @@ def main(args):
         instrument = pretty_midi.Instrument(0) #instrumentはトラックみたいなものです。
         for i,tones in enumerate(song):
             which_tone = (tones == 1).nonzero().reshape(-1)
-            print(which_tone)
             if len(which_tone) == 0:
                 note = pretty_midi.Note(velocity=0, pitch=0, start=i, end=i+1) #noteはNoteOnEventとNoteOffEventに相当します。
                 instrument.notes.append(note)
@@ -409,6 +409,18 @@ def main(args):
             tones_container = torch.stack(tones_container)
             songs_list.append([tones_container])
         return songs_list
+
+    def saveSongs(songs_list, mini_batch, N_songs, path):
+        if len(songs_list) != len(mini_batch):
+            assert False
+        if N_songs <= len(songs_list):
+            song_No = random.sample(range(len(songs_list)), k=N_songs)
+        else :
+            song_No = random.sample(range(len(songs_list)), k=len(songs_list))
+        for i, Number in enumerate(song_No):
+            save_as_midi(song=songs_list[Number], path=path, name="No%d_Gene.midi"%i)
+            save_as_midi(song=mini_batch[Number], path=path, name="No%d_Tran.midi"%i)
+
 
     ## 長さ最長129、例えば長さが60のやつは61~129はすべて0データ
     data = poly.load_data(poly.JSB_CHORALES)
@@ -458,6 +470,13 @@ def main(args):
     # make directory for Data
     now = datetime.datetime.now().strftime('%Y%m%d_%H_%M')
     os.makedirs(os.path.join("saveData", now), exist_ok=True)
+
+    # save args as TEXT
+    f = open(os.path.join("saveData", now, 'args.txt'), 'w') # 書き込みモードで開く
+    for name, site in vars(args).items():
+        f.write(name +" = ") 
+        f.write(str(site) + "\n")
+    f.close() # ファイルを閉じる
 
     #######################
     #### TRAINING LOOP ####
@@ -521,9 +540,21 @@ def main(args):
             print("        loss : %f " % epoch_nll)
         
         if epoch % args.checkpoint_freq == 0:
-            a =1
+            path = os.path.join("saveData", now, "Epoch%d"%epoch)
+            os.makedirs(path, exist_ok=True)
+            songs_list = generate_Xs(dmm, mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths)
+            saveSongs(songs_list, mini_batch, N_songs=2, path=path)
+
         if epoch == args.num_epochs-1:
             saveGraph(losses, now)
+            saveDic = {
+                "DMM_dic": dmm.state_dict,
+                "WGAN_Network_dic": WN.state_dict,
+                "epoch_times": times,
+                "losses":losses
+            }
+            # torch.save(saveDic,os.path.join("saveData", now, "dic_Epoch%d"%(epoch+1)))
+            torch.save(saveDic,os.path.join("saveData", now, "DMM_dic"))
 
 
 # parse command-line arguments and execute the main method
