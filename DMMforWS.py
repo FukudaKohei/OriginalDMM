@@ -255,18 +255,24 @@ class WGAN_network(nn.Module):
 
         ## the number of tones
         self.song_size = 88
-
+        ## the length of each song
+        self.song_length = 8
+        
+        self.input_size = self.song_size * self.song_length
         self.hidden_size = hiddden_dim
+
         self.D =  nn.Sequential(
-                    nn.Linear(self.song_size, self.hidden_size),
+                    nn.Linear(self.input_size, self.hidden_size),
                     nn.LeakyReLU(0.2),
                     nn.Linear(self.hidden_size, 1))
     
     def forward(self, train_mini_batch, generated_mini_batch):
+        train_mini_batch =  train_mini_batch.reshape(len(train_mini_batch),-1)
+        generated_mini_batch = generated_mini_batch.reshape(len(generated_mini_batch),-1)
         outputs_real = self.D(train_mini_batch)
         outputs_fake = self.D(generated_mini_batch)
         # print(outputs_real.size())
-        # print(outputs_real.size())        
+        # print(outputs_fake.size())
         # if any(torch.isnan(outputs_real.reshape(-1))):
         #     print("REAL")
         # if any(torch.isnan(generated_mini_batch.reshape(-1))):
@@ -275,7 +281,7 @@ class WGAN_network(nn.Module):
         #     print("FAKE")
         # if torch.isnan(-(torch.mean(outputs_real) - torch.mean(outputs_fake))):
         #     print("OUTPUT")
-        return -(torch.mean(outputs_real) - torch.mean(outputs_fake))
+        return (torch.mean(outputs_real) - torch.mean(outputs_fake))
 
 class WassersteinLoss():
     def __init__(self, WGAN_network, N_loops=5, lr=0.00001):
@@ -289,7 +295,7 @@ class WassersteinLoss():
 
     def calc(self, train_mini_batch, generated_mini_batch):
         # vanish grad_fn of DMM's parameters
-        no_grad_generated_mini_batch = generated_mini_batch.clone().detach()
+        no_grad_generated_mini_batch = torch.tensor(generated_mini_batch)
 
         # activate grad_fn of Wass calculator's parameters 
         for p in self.D.parameters():
@@ -299,10 +305,10 @@ class WassersteinLoss():
         for i in range(self.N_loops):
             # print("{0}%".format(i*20))
             # NaN_detect(self.D,i,"Before calc")
-            loss = self.WGAN_network(train_mini_batch, no_grad_generated_mini_batch)
+            minus_loss = - self.WGAN_network(train_mini_batch, no_grad_generated_mini_batch)
             # print(loss)
             self.optimizer.zero_grad()
-            loss.backward() # 勾配を計算
+            minus_loss.backward() # 勾配を計算
             self.optimizer.step() # 重みパラメータを更新 (Algorithm 1のStep 6)
 
             # NaN_detect(self.D,i,"Before Clip")
@@ -323,7 +329,7 @@ class WassersteinLoss():
         # torch.save(self.D.state_dict(), "D")
 
         # Wass is positive
-        return -loss
+        return loss
 
 
 def main(args):
@@ -429,13 +435,13 @@ def main(args):
     training_data_sequences = data['train']['sequences']
 
     # ## ドドド、レレレ、ミミミ、ドレミ
-    # training_seq_lengths, training_data_sequences = easyTones()
+    training_seq_lengths, training_data_sequences = easyTones()
 
     ## ドドド、レレレ
     # training_seq_lengths, training_data_sequences = superEasyTones()
 
     ## ドドドのみ
-    training_seq_lengths, training_data_sequences = easiestTones()
+    # training_seq_lengths, training_data_sequences = easiestTones()
 
 
     test_seq_lengths = data['test']['sequence_lengths']
@@ -553,6 +559,11 @@ def main(args):
             saveSongs(songs_list, mini_batch, N_songs=2, path=path)
 
         if epoch == args.num_epochs-1:
+            path = os.path.join("saveData", now, "Epoch%d"%args.num_epochs)
+            os.makedirs(path, exist_ok=True)
+            songs_list = generate_Xs(dmm, mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths)
+            saveSongs(songs_list, mini_batch, N_songs=2, path=path)
+
             saveGraph(losses, now)
             saveDic = {
                 "DMM_dic": dmm.state_dict,

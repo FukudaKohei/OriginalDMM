@@ -105,6 +105,7 @@ for epoch in range(num_epochs):
 
             # 実データをDiscriminatorにより評価 (論文のAlgorithm 1のStep 3)
             outputs_real = D(images2)
+            
 
             # 偽の画像データのGeneratorによる生成(論文のAlgorithm 1のStep 4)
             z = torch.randn(batch_size, latent_size).to(device)
@@ -149,7 +150,7 @@ for epoch in range(num_epochs):
         images = images.reshape(images.size(0), 1, 28, 28)
         save_image(denorm(images), os.path.join(sample_dir, 'real_images.png'))
     
-    # Save sampled images
+    # # Save sampled images
     fake_images = fake_images.reshape(fake_images.size(0), 1, 28, 28)
     save_image(denorm(fake_images), os.path.join(sample_dir, 'fake_images-{}.png'.format(epoch+1)))
 
