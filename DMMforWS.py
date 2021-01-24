@@ -432,10 +432,10 @@ def main(args):
     # training_seq_lengths, training_data_sequences = easyTones()
 
     ## ドドド、レレレ
-    training_seq_lengths, training_data_sequences = superEasyTones()
+    # training_seq_lengths, training_data_sequences = superEasyTones()
 
     ## ドドドのみ
-    # training_seq_lengths, training_data_sequences = easiestTones()
+    training_seq_lengths, training_data_sequences = easiestTones()
 
 
     test_seq_lengths = data['test']['sequence_lengths']
