@@ -552,7 +552,7 @@ def main(args):
         #                 (epoch, epoch_nll / N_train_time_slices, epoch_time))
         if epoch % 10 == 0:
             # print("epoch %d time : %d sec" % (epoch, int(epoch_time)))
-            print("\r"+"        loss : %f " % epoch_nll, end="")
+            print("\r\n"+"        loss : %f " % epoch_nll, end="")
         
         if epoch % args.checkpoint_freq == 0:
             path = os.path.join("saveData", now, "Epoch%d"%epoch)
