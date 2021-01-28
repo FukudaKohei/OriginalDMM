@@ -3,6 +3,7 @@ import logging
 import time
 import random
 import datetime
+import tqdm
 from os.path import exists
 import os
 
@@ -262,13 +263,14 @@ class WGAN_network(nn.Module):
         self.hidden_size = hiddden_dim
 
         self.D =  nn.Sequential(
-                    nn.Linear(self.input_size, self.hidden_size),
+                    # nn.Linear(self.input_size, self.hidden_size),
+                    nn.Linear(self.song_size, self.hidden_size),
                     nn.LeakyReLU(0.2),
                     nn.Linear(self.hidden_size, 1))
     
     def forward(self, train_mini_batch, generated_mini_batch):
-        train_mini_batch =  train_mini_batch.reshape(len(train_mini_batch),-1)
-        generated_mini_batch = generated_mini_batch.reshape(len(generated_mini_batch),-1)
+        # train_mini_batch =  train_mini_batch.reshape(len(train_mini_batch),-1)
+        # generated_mini_batch = generated_mini_batch.reshape(len(generated_mini_batch),-1)
         outputs_real = self.D(train_mini_batch)
         outputs_fake = self.D(generated_mini_batch)
         # print(outputs_real.size())
@@ -435,10 +437,10 @@ def main(args):
     training_data_sequences = data['train']['sequences']
 
     # ## ドドド、レレレ、ミミミ、ドレミ
-    training_seq_lengths, training_data_sequences = easyTones()
+    # training_seq_lengths, training_data_sequences = easyTones()
 
     ## ドドド、レレレ
-    # training_seq_lengths, training_data_sequences = superEasyTones()
+    training_seq_lengths, training_data_sequences = superEasyTones()
 
     ## ドドドのみ
     # training_seq_lengths, training_data_sequences = easiestTones()
@@ -496,7 +498,7 @@ def main(args):
     #######################
     times = [time.time()]
     losses = []
-    for epoch in range(args.num_epochs):
+    for epoch in tqdm.tqdm(range(args.num_epochs)):
         epoch_nll = 0
         shuffled_indices = torch.randperm(N_train_data)
         # print("Proceeding: %.2f " % (epoch*100/5000) + "%")
@@ -549,8 +551,8 @@ def main(args):
         # logging.info("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
         #                 (epoch, epoch_nll / N_train_time_slices, epoch_time))
         if epoch % 10 == 0:
-            print("epoch %d time : %d sec" % (epoch, int(epoch_time)))
-            print("        loss : %f " % epoch_nll)
+            # print("epoch %d time : %d sec" % (epoch, int(epoch_time)))
+            print("\r"+"        loss : %f " % epoch_nll, end="")
         
         if epoch % args.checkpoint_freq == 0:
             path = os.path.join("saveData", now, "Epoch%d"%epoch)
