@@ -202,6 +202,8 @@ class DMM(nn.Module):
 
         # reverse the time-ordering in the hidden state and un-pack it
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
+        # print(rnn_output.size())
+        # assert False
         # if any(torch.isnan(rnn_output.reshape(-1))):
         #     print("rnn_output")
         # set z_prev = z_q_0 to setup the recursive conditioning in q(z_t |...)
@@ -297,7 +299,8 @@ class WassersteinLoss():
 
     def calc(self, train_mini_batch, generated_mini_batch):
         # vanish grad_fn of DMM's parameters
-        no_grad_generated_mini_batch = torch.tensor(generated_mini_batch)
+        no_grad_generated_mini_batch = generated_mini_batch.clone().detach()
+        # no_grad_generated_mini_batch = torch.tensor(generated_mini_batch)
 
         # activate grad_fn of Wass calculator's parameters 
         for p in self.D.parameters():
@@ -393,7 +396,7 @@ def main(args):
         pm = pretty_midi.PrettyMIDI(resolution=960, initial_tempo=BPM) #pretty_midiオブジェクトを作ります
         instrument = pretty_midi.Instrument(0) #instrumentはトラックみたいなものです。
         for i,tones in enumerate(song):
-            which_tone = (tones == 1).nonzero().reshape(-1)
+            which_tone = torch.nonzero((tones == 1), as_tuple=False).reshape(-1)
             if len(which_tone) == 0:
                 note = pretty_midi.Note(velocity=0, pitch=0, start=i, end=i+1) #noteはNoteOnEventとNoteOffEventに相当します。
                 instrument.notes.append(note)
@@ -440,7 +443,7 @@ def main(args):
     # training_seq_lengths, training_data_sequences = easyTones()
 
     ## ドドド、レレレ
-    training_seq_lengths, training_data_sequences = superEasyTones()
+    # training_seq_lengths, training_data_sequences = superEasyTones()
 
     ## ドドドのみ
     # training_seq_lengths, training_data_sequences = easiestTones()
@@ -552,9 +555,9 @@ def main(args):
         epoch_time = times[-1] - times[-2]
         # logging.info("[training epoch %04d]  %.4f \t\t\t\t(dt = %.3f sec)" %
         #                 (epoch, epoch_nll / N_train_time_slices, epoch_time))
-        if epoch % 10 == 0:
+        # if epoch % 10 == 0:
             # print("epoch %d time : %d sec" % (epoch, int(epoch_time)))
-            pbar.set_description("loss = %f " % epoch_nll)
+        pbar.set_description("LOSS = %f " % epoch_nll)
             # tqdm.write("\r"+"        loss : %f " % epoch_nll, end="")
         
         if epoch % args.checkpoint_freq == 0:
