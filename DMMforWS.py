@@ -478,7 +478,8 @@ def main(args):
     W = WassersteinLoss(WN, N_loops=args.N_loops, lr=args.w_learning_rate)
 
     # Create optimizer algorithm
-    optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate)
+    optimizer = optim.SGD(dmm.parameters(), lr=args.learning_rate)
+    # optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate)
     # Add learning rate scheduler
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999)
 
@@ -498,7 +499,8 @@ def main(args):
     #######################
     times = [time.time()]
     losses = []
-    for epoch in tqdm.tqdm(range(args.num_epochs)):
+    pbar = tqdm.tqdm(range(args.num_epochs))
+    for epoch in pbar:
         epoch_nll = 0
         shuffled_indices = torch.randperm(N_train_data)
         # print("Proceeding: %.2f " % (epoch*100/5000) + "%")
@@ -552,7 +554,8 @@ def main(args):
         #                 (epoch, epoch_nll / N_train_time_slices, epoch_time))
         if epoch % 10 == 0:
             # print("epoch %d time : %d sec" % (epoch, int(epoch_time)))
-            print("\r\n"+"        loss : %f " % epoch_nll, end="")
+            pbar.set_description("loss = %f " % epoch_nll)
+            # tqdm.write("\r"+"        loss : %f " % epoch_nll, end="")
         
         if epoch % args.checkpoint_freq == 0:
             path = os.path.join("saveData", now, "Epoch%d"%epoch)
