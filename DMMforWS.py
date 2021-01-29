@@ -443,7 +443,7 @@ def main(args):
     # training_seq_lengths, training_data_sequences = easyTones()
 
     ## ドドド、レレレ
-    # training_seq_lengths, training_data_sequences = superEasyTones()
+    training_seq_lengths, training_data_sequences = superEasyTones()
 
     ## ドドドのみ
     # training_seq_lengths, training_data_sequences = easiestTones()
@@ -481,8 +481,8 @@ def main(args):
     W = WassersteinLoss(WN, N_loops=args.N_loops, lr=args.w_learning_rate)
 
     # Create optimizer algorithm
-    optimizer = optim.SGD(dmm.parameters(), lr=args.learning_rate)
-    # optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate)
+    # optimizer = optim.SGD(dmm.parameters(), lr=args.learning_rate)
+    optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate)
     # Add learning rate scheduler
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999)
 
