@@ -501,7 +501,9 @@ def main(args):
     # optimizer = optim.SGD(dmm.parameters(), lr=args.learning_rate)
     optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate)
     # Add learning rate scheduler
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999) #1でもやってみる
+    # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999) 
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 1.) 
+    #1でもやってみる
 
     # make directory for Data
     now = datetime.datetime.now().strftime('%Y%m%d_%H_%M')
