@@ -338,12 +338,12 @@ class WassersteinLoss():
 
 def objective(trial):
 
-    num_epochs=10000
+    num_epochs=5000
     learning_rate = trial.suggest_loguniform("learning_rate", 1e-8, 1e-2)
     if_rnn_clip = False
     rnn_clip = 0.01
     w_learning_rate=0.00001
-    N_loops = 10
+    N_loops = 30
     rck = False
     eas = False
     sup = True
