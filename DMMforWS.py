@@ -217,7 +217,9 @@ class DMM(nn.Module):
             z_loc, z_scale = self.combiner(z_prev, rnn_output[:, t - 1, :])
 
             # Reparameterization Trick
-            eps = torch.randn(z_loc.size())
+            if self.use_cuda:
+                eps = torch.randn(z_loc.size()).cuda()
+            else: eps = torch.randn(z_loc.size())
             z_t = z_loc + z_scale * eps
 
             # compute the probabilities that parameterize the bernoulli likelihood
@@ -236,11 +238,12 @@ class DMM(nn.Module):
             x = emission_probs_t
 
             #Reparameterization Trick
-            if self.rpt : 
-                eps = torch.rand(88)
-                rpt_eps = 1e-20
+            if self.rpt :
+                if self.use_cuda: 
+                    eps = torch.rand(88).cuda()
+                else : eps = torch.rand(88)
                 # assert len(emission_probs_t) == 88
-                appxm = torch.log(eps + rpt_eps) - torch.log(1-eps + rpt_eps) + torch.log(x + rpt_eps) - torch.log(1-x + rpt_eps)
+                appxm = torch.log(eps + 1e-20) - torch.log(1-eps + 1e-20) + torch.log(x + 1e-20) - torch.log(1-x + 1e-20)
                 # appxm = torch.log(eps) - torch.log(1-eps) + torch.log(x) - torch.log(1-x)
                 x = torch.sigmoid(appxm)
 
@@ -253,7 +256,7 @@ class DMM(nn.Module):
         return x_container.transpose(0,1)
 
 class WGAN_network(nn.Module):
-    def __init__(self, hiddden_dim=256):
+    def __init__(self, hiddden_dim=256, use_cuda=False):
         super().__init__()
 
         ## the number of tones
@@ -269,6 +272,11 @@ class WGAN_network(nn.Module):
                     nn.Linear(self.song_size, self.hidden_size),
                     nn.LeakyReLU(0.2),
                     nn.Linear(self.hidden_size, 1))
+
+        self.use_cuda = use_cuda
+        # if on gpu cuda-ize all PyTorch (sub)modules
+        if use_cuda:
+            self.cuda()
     
     def forward(self, train_mini_batch, generated_mini_batch):
         # train_mini_batch =  train_mini_batch.reshape(len(train_mini_batch),-1)
@@ -287,14 +295,20 @@ class WGAN_network(nn.Module):
         #     print("OUTPUT")
         return (torch.mean(outputs_real) - torch.mean(outputs_fake))
 
-class WassersteinLoss():
-    def __init__(self, WGAN_network, N_loops=5, lr=0.00001):
+class WassersteinLoss(nn.Module):
+    def __init__(self, WGAN_network, N_loops=5, lr=0.00001, use_cuda=False):
+        super().__init__()
         self.WGAN_network = WGAN_network
         self.D = self.WGAN_network.D
         self.optimizer = torch.optim.RMSprop(self.D.parameters(), lr=lr)
         # self.optimizer = torch.optim.Adam(self.D.parameters(), lr=lr)
         # the number of loops of calculation of Wass
         self.N_loops = N_loops
+
+        self.use_cuda = use_cuda
+        # if on gpu cuda-ize all PyTorch (sub)modules
+        if use_cuda:
+            self.cuda()
 
 
     def calc(self, train_mini_batch, generated_mini_batch):
@@ -349,12 +363,12 @@ def main(args):
         for i in range(5,8):
             training_data_sequences[i][0][int(110-i*10)  ] = 1
             training_data_sequences[i][1][int(110-i*10)+2] = 1
-            training_data_sequences[i][2][int(110-i*10)+2] = 1
-            training_data_sequences[i][3][int(110-i*10)+1] = 1
-            training_data_sequences[i][4][int(110-i*10)+2] = 1
-            training_data_sequences[i][5][int(110-i*10)+2] = 1
-            training_data_sequences[i][6][int(110-i*10)+2] = 1
-            training_data_sequences[i][7][int(110-i*10)+1] = 1
+            training_data_sequences[i][2][int(110-i*10)+4] = 1
+            training_data_sequences[i][3][int(110-i*10)+5] = 1
+            training_data_sequences[i][4][int(110-i*10)+7] = 1
+            training_data_sequences[i][5][int(110-i*10)+9] = 1
+            training_data_sequences[i][6][int(110-i*10)+11] = 1
+            training_data_sequences[i][7][int(110-i*10)+12] = 1
         return training_seq_lengths, training_data_sequences
     ## ドドド、レレレ
     def superEasyTones():
@@ -439,14 +453,17 @@ def main(args):
     training_seq_lengths = data['train']['sequence_lengths']
     training_data_sequences = data['train']['sequences']
 
-    # ## ドドド、レレレ、ミミミ、ドレミ
-    # training_seq_lengths, training_data_sequences = easyTones()
+    if args.eas:
+        # ## ドドド、レレレ、ミミミ、ドレミ
+        training_seq_lengths, training_data_sequences = easyTones()
+    
+    if args.sup:
+        # ドドド、レレレ
+        training_seq_lengths, training_data_sequences = superEasyTones()
 
-    ## ドドド、レレレ
-    training_seq_lengths, training_data_sequences = superEasyTones()
-
-    ## ドドドのみ
-    # training_seq_lengths, training_data_sequences = easiestTones()
+    if args.est:
+        ## ドドドのみ
+        training_seq_lengths, training_data_sequences = easiestTones()
 
 
     test_seq_lengths = data['test']['sequence_lengths']
@@ -477,14 +494,14 @@ def main(args):
 
 
     dmm = DMM(use_cuda=args.cuda, rnn_check=args.rck, rpt=args.rpt)
-    WN = WGAN_network()
-    W = WassersteinLoss(WN, N_loops=args.N_loops, lr=args.w_learning_rate)
+    WN = WGAN_network(use_cuda = args.cuda)
+    W = WassersteinLoss(WN, N_loops=args.N_loops, lr=args.w_learning_rate, use_cuda = args.cuda)
 
     # Create optimizer algorithm
     # optimizer = optim.SGD(dmm.parameters(), lr=args.learning_rate)
     optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate)
     # Add learning rate scheduler
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999)
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999) #1でもやってみる
 
     # make directory for Data
     now = datetime.datetime.now().strftime('%Y%m%d_%H_%M')
@@ -591,10 +608,13 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.0003)
     parser.add_argument('-wlr', '--w-learning-rate', type=float, default=0.00001)
-    parser.add_argument('-nls', '--N-loops', type=int, default=5)
+    parser.add_argument('-nls', '--N-loops', type=int, default=10)
     parser.add_argument('--rpt', action='store_true')
     parser.add_argument('-rcl', '--rnn-clip', type=float, default=None)
     parser.add_argument('--rck', action='store_true')
+    parser.add_argument('--est', action='store_true')
+    parser.add_argument('--sup', action='store_true')
+    parser.add_argument('--eas', action='store_true')
     parser.add_argument('-b1', '--beta1', type=float, default=0.96)
     parser.add_argument('-b2', '--beta2', type=float, default=0.999)
     parser.add_argument('-cn', '--clip-norm', type=float, default=10.0)

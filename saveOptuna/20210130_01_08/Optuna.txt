@@ -1,0 +1,2 @@
+learning_rate = 4.300703773829986e-07
+BEAT VALUE = 
