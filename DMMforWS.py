@@ -353,22 +353,19 @@ class WassersteinLoss(nn.Module):
 
 def main(args):
 
-    ## ドドド、レレレ、ミミミ、ドレミ
+    ## ドレミ
     def easyTones():
         training_seq_lengths = torch.tensor([8]*10)
         training_data_sequences = torch.zeros(10,8,88)
-        for i in range(5):
-            for j in range(8):
-                training_data_sequences[i][j][int(20+i*10)] = 1
-        for i in range(5,8):
-            training_data_sequences[i][0][int(110-i*10)  ] = 1
-            training_data_sequences[i][1][int(110-i*10)+2] = 1
-            training_data_sequences[i][2][int(110-i*10)+4] = 1
-            training_data_sequences[i][3][int(110-i*10)+5] = 1
-            training_data_sequences[i][4][int(110-i*10)+7] = 1
-            training_data_sequences[i][5][int(110-i*10)+9] = 1
-            training_data_sequences[i][6][int(110-i*10)+11] = 1
-            training_data_sequences[i][7][int(110-i*10)+12] = 1
+        for i in range(8):
+            training_data_sequences[i][0][int(70-i*10)  ] = 1
+            training_data_sequences[i][1][int(70-i*10)+2] = 1
+            training_data_sequences[i][2][int(70-i*10)+4] = 1
+            training_data_sequences[i][3][int(70-i*10)+5] = 1
+            training_data_sequences[i][4][int(70-i*10)+7] = 1
+            training_data_sequences[i][5][int(70-i*10)+9] = 1
+            training_data_sequences[i][6][int(70-i*10)+11] = 1
+            training_data_sequences[i][7][int(70-i*10)+12] = 1
         return training_seq_lengths, training_data_sequences
     ## ドドド、レレレ
     def superEasyTones():
