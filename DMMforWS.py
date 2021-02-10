@@ -22,6 +22,9 @@ from pyro.distributions.transforms import affine_autoregressive
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO, TraceEnum_ELBO, TraceTMC_ELBO, config_enumerate
 from pyro.optim import ClippedAdam
 
+import ot
+import torch.nn.functional as F
+
 import mido
 from mido import Message, MidiFile, MidiTrack, MetaMessage
 
@@ -350,6 +353,44 @@ class WassersteinLoss(nn.Module):
         # Wass is positive
         return loss
 
+def EMD(xT, mud_arr):
+    # print("DONE0")
+    x_p = xT.detach().clone().numpy()
+    mud_p = mud_arr.detach().clone().numpy()
+    
+    n_points = xT.size()[0]
+    n_tones = xT.size()[1]
+    dim = xT.size()[2]
+    # print("DONE1")
+    # x_p = xT.reshape((n_points, dim)).cpu().detach().numpy()
+    x_p = x_p.reshape((n_points, n_tones * dim))
+    # mud_p = mud_arr.reshape((n_points, dim)).cpu().detach().numpy()
+    mud_p = mud_p.reshape((n_points, n_tones * dim))
+    # print(x_p.shape)
+    # print(mud_p.shape)
+    # print("DONE2")
+    M = ot.dist(x_p, mud_p)
+    M /= M.max()
+    a, b = np.ones((n_points,)) / n_points, np.ones((n_points,)) / n_points  # uniform distribution on samples
+    gamma = ot.emd(a, b, M)
+    # wdis = ot.emd2_1d(xT, mud_arr)
+    # print('Wasserstein distance:', wdis)
+    # print("DONE3")
+
+    Tx = []
+    for i, xTi in enumerate(x_p):
+        ind = gamma[i,:].argmax()
+        Tx.append(mud_arr[ind])
+        # print(f'index {i}: ind {ind} mud_p[{ind}]={mud_p[ind]}') 
+    # print("DONE4")
+    # print(Tx[0])
+    # Tx = torch.from_numpy(np.array(Tx).reshape((n_points, 1, n_tones*dim)))
+    # Tx = torch.tensor(Tx,dtype=torch.float32)
+    # x = xT.reshape(n_points,1,n_tones*dim)
+    # Wasser = F.mse_loss(x, Tx)
+    Tx = torch.stack(Tx)
+    return torch.norm(Tx-xT, dim=1).sum()
+
 
 def main(args):
 
@@ -549,7 +590,10 @@ def main(args):
             #     assert False
             # NaN_detect(WN, epoch, message="calc_Before")
             # calculate loss
-            loss = W.calc(mini_batch, generated_mini_batch)
+            if args.wass:
+                loss = EMD(mini_batch, generated_mini_batch)
+            if args.wgan:
+                loss = W.calc(mini_batch, generated_mini_batch)
             # NaN_detect(WN, epoch, message="calc_After")
 
             # NaN_detect(dmm, epoch, message="step_Before")        
@@ -610,6 +654,8 @@ if __name__ == '__main__':
     parser.add_argument('-nls', '--N-loops', type=int, default=10)
     parser.add_argument('--rpt', action='store_true')
     parser.add_argument('-rcl', '--rnn-clip', type=float, default=None)
+    parser.add_argument('--wgan', action='store_true')
+    parser.add_argument('--wass', action='store_true')
     parser.add_argument('--rck', action='store_true')
     parser.add_argument('--est', action='store_true')
     parser.add_argument('--sup', action='store_true')
