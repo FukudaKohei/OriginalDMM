@@ -396,9 +396,9 @@ def main(args):
 
     ## ドレミ
     def easyTones():
-        training_seq_lengths = torch.tensor([8]*10)
-        training_data_sequences = torch.zeros(10,8,88)
-        for i in range(8):
+        training_seq_lengths = torch.tensor([8]*1)
+        training_data_sequences = torch.zeros(1,8,88)
+        for i in range(1):
             training_data_sequences[i][0][int(70-i*10)  ] = 1
             training_data_sequences[i][1][int(70-i*10)+2] = 1
             training_data_sequences[i][2][int(70-i*10)+4] = 1
