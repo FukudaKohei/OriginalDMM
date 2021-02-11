@@ -8,9 +8,7 @@ between this implementation and theirs is that in our version any KL divergence 
 in the ELBO are estimated via sampling, while they make use of the analytic formulae.
 We also illustrate the use of normalizing flows in the variational distribution (in which
 case analytic formulae for the KL divergences are in any case unavailable).
-
 Reference:
-
 [1] Structured Inference Networks for Nonlinear State Space Models [arXiv:1609.09869]
     Rahul G. Krishnan, Uri Shalit, David Sontag
 """
@@ -32,9 +30,6 @@ from pyro.distributions import TransformedDistribution
 from pyro.distributions.transforms import affine_autoregressive
 from pyro.infer import SVI, JitTrace_ELBO, Trace_ELBO, TraceEnum_ELBO, TraceTMC_ELBO, config_enumerate
 from pyro.optim import ClippedAdam
-
-########Original############
-import customELBO
 
 
 class Emitter(nn.Module):
@@ -299,15 +294,13 @@ def main(args):
     training_data_sequences = data['train']['sequences']
     test_seq_lengths = data['test']['sequence_lengths']
     test_data_sequences = data['test']['sequences']
-    print(training_data_sequences.shape)
-    # print(training_seq_lengths)
     val_seq_lengths = data['valid']['sequence_lengths']
     val_data_sequences = data['valid']['sequences']
     N_train_data = len(training_seq_lengths)
     N_train_time_slices = float(torch.sum(training_seq_lengths))
     N_mini_batches = int(N_train_data / args.mini_batch_size +
                          int(N_train_data % args.mini_batch_size > 0))
-    print(N_mini_batches)
+
     logging.info("N_train_data: %d     avg. training seq. length: %.2f    N_mini_batches: %d" %
                  (N_train_data, training_seq_lengths.float().mean(), N_mini_batches))
 
@@ -358,7 +351,7 @@ def main(args):
         dmm_guide = config_enumerate(dmm.guide, default="parallel", num_samples=args.tmc_num_samples, expand=False)
         svi = SVI(dmm.model, dmm_guide, adam, loss=elbo)
     else:
-        elbo = JitTrace_ELBO() if args.jit else customELBO.Trace_ELBO_custom()
+        elbo = JitTrace_ELBO() if args.jit else Trace_ELBO()
         svi = SVI(dmm.model, dmm.guide, adam, loss=elbo)
 
     # now we're going to define some functions we need to form the main training loop
@@ -367,8 +360,8 @@ def main(args):
     def save_checkpoint():
         logging.info("saving model to %s..." % args.save_model)
         torch.save(dmm.state_dict(), args.save_model)
-        logging.info("saving optimizer states to %s..." % args.save_opt)
-        adam.save(args.save_opt)
+        # logging.info("saving optimizer states to %s..." % args.save_opt)
+        # adam.save(args.save_opt)
         logging.info("done saving model and optimizer checkpoints to disk.")
 
     # loads the model and optimizer states from disk
@@ -402,8 +395,6 @@ def main(args):
             = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
                                   training_seq_lengths, cuda=args.cuda)
         # do an actual gradient step
-        # print(mini_batch.shape)
-        # print(mini_batch_mask)
         loss = svi.step(mini_batch, mini_batch_reversed, mini_batch_mask,
                         mini_batch_seq_lengths, annealing_factor)
         # keep track of the training loss
@@ -456,11 +447,10 @@ def main(args):
         if val_test_frequency > 0 and epoch > 0 and epoch % val_test_frequency == 0:
             val_nll, test_nll = do_evaluation()
             logging.info("[val/test epoch %04d]  %.4f  %.4f" % (epoch, val_nll, test_nll))
-    # print(dmm.z_0)
+
 
 # parse command-line arguments and execute the main method
 if __name__ == '__main__':
-    assert pyro.__version__.startswith('1.5.1')
 
     parser = argparse.ArgumentParser(description="parse args")
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)
