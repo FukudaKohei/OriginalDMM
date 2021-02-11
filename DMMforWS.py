@@ -488,8 +488,8 @@ def main(args):
 
     ## 長さ最長129、例えば長さが60のやつは61~129はすべて0データ
     data = poly.load_data(poly.JSB_CHORALES)
-    training_seq_lengths = data['train']['sequence_lengths']
-    training_data_sequences = data['train']['sequences']
+    training_seq_lengths = data['train']['sequence_lengths'][:2]
+    training_data_sequences = data['train']['sequences'][:2]
 
     if args.eas:
         # ## ドドド、レレレ、ミミミ、ドレミ
@@ -537,7 +537,7 @@ def main(args):
 
     # Create optimizer algorithm
     # optimizer = optim.SGD(dmm.parameters(), lr=args.learning_rate)
-    optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate)
+    optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate, betas=(0.96, 0.999), weight_decay=2.0)
     # Add learning rate scheduler
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999) 
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 1.) 
