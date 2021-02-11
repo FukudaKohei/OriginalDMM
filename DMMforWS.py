@@ -370,7 +370,7 @@ def EMD(xT, mud_arr):
     # print(mud_p.shape)
     # print("DONE2")
     M = ot.dist(x_p, mud_p)
-    M /= M.max()
+    # M /= M.max()
     a, b = np.ones((n_points,)) / n_points, np.ones((n_points,)) / n_points  # uniform distribution on samples
     gamma = ot.emd(a, b, M)
     # wdis = ot.emd2_1d(xT, mud_arr)
@@ -488,8 +488,8 @@ def main(args):
 
     ## 長さ最長129、例えば長さが60のやつは61~129はすべて0データ
     data = poly.load_data(poly.JSB_CHORALES)
-    training_seq_lengths = data['train']['sequence_lengths'][:2]
-    training_data_sequences = data['train']['sequences'][:2]
+    training_seq_lengths = data['train']['sequence_lengths'][:1]
+    training_data_sequences = data['train']['sequences'][:1]
 
     if args.eas:
         # ## ドドド、レレレ、ミミミ、ドレミ
