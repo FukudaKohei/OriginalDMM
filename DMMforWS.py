@@ -488,8 +488,9 @@ def main(args):
 
     ## 長さ最長129、例えば長さが60のやつは61~129はすべて0データ
     data = poly.load_data(poly.JSB_CHORALES)
-    training_seq_lengths = data['train']['sequence_lengths'][:1]
-    training_data_sequences = data['train']['sequences'][:1]
+    training_seq_lengths = data['train']['sequence_lengths'][:3]
+    training_data_sequences = data['train']['sequences'][:3,:8]
+    training_seq_lengths = torch.tensor([8,8,8])
 
     if args.eas:
         # ## ドドド、レレレ、ミミミ、ドレミ
@@ -537,7 +538,8 @@ def main(args):
 
     # Create optimizer algorithm
     # optimizer = optim.SGD(dmm.parameters(), lr=args.learning_rate)
-    optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate, betas=(0.96, 0.999), weight_decay=2.0)
+    # optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate, betas=(0.96, 0.999), weight_decay=2.0)
+    optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate)
     # Add learning rate scheduler
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999) 
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 1.) 
