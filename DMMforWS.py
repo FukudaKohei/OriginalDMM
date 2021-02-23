@@ -146,7 +146,7 @@ class DMM(nn.Module):
     """
 
     def __init__(self, input_dim=88, z_dim=100, emission_dim=100,
-                 transition_dim=200, rnn_dim=600, num_layers=1, rnn_dropout_rate=0.1,
+                 transition_dim=200, rnn_dim=60, num_layers=1, rnn_dropout_rate=0.1,
                  num_iafs=0, iaf_dim=50, use_cuda=False, rnn_check=False, rpt=True):
         super().__init__()
         # instantiate PyTorch modules used in the model and guide below
