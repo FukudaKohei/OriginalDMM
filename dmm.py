@@ -282,6 +282,21 @@ class DMM(nn.Module):
 
 # setup, training, and evaluation
 def main(args):
+    ## ドレミ
+    def easyTones():
+        training_seq_lengths = torch.tensor([8]*1)
+        training_data_sequences = torch.zeros(1,8,88)
+        for i in range(1):
+            training_data_sequences[i][0][int(70-i*10)  ] = 1
+            training_data_sequences[i][1][int(70-i*10)+2] = 1
+            training_data_sequences[i][2][int(70-i*10)+4] = 1
+            training_data_sequences[i][3][int(70-i*10)+5] = 1
+            training_data_sequences[i][4][int(70-i*10)+7] = 1
+            training_data_sequences[i][5][int(70-i*10)+9] = 1
+            training_data_sequences[i][6][int(70-i*10)+11] = 1
+            training_data_sequences[i][7][int(70-i*10)+12] = 1
+        return training_seq_lengths, training_data_sequences
+
     def superEasyTones():
         training_seq_lengths = torch.tensor([8]*10)
         training_data_sequences = torch.zeros(10,8,88)
@@ -289,7 +304,16 @@ def main(args):
             for j in range(8):
                 training_data_sequences[i][j][int(30+i*5)] = 1
         return training_seq_lengths, training_data_sequences
-    
+
+    ## ドドド、ドドド、ドドド
+    def easiestTones():
+        training_seq_lengths = torch.tensor([8]*10)
+        training_data_sequences = torch.zeros(10,8,88)
+        for i in range(10):
+            for j in range(8):
+                training_data_sequences[i][j][int(70)] = 1
+        return training_seq_lengths, training_data_sequences
+
     # setup logging
     logging.basicConfig(level=logging.DEBUG, format='%(message)s', filename=args.log, filemode='w')
     console = logging.StreamHandler()
@@ -300,13 +324,13 @@ def main(args):
     data = poly.load_data(poly.JSB_CHORALES)
     training_seq_lengths = data['train']['sequence_lengths']
     training_data_sequences = data['train']['sequences']
-    training_seq_lengths, training_data_sequences = superEasyTones()
+    training_seq_lengths, training_data_sequences = easiestTones()
     test_seq_lengths = data['test']['sequence_lengths']
     test_data_sequences = data['test']['sequences']
-    test_seq_lengths, test_data_sequences = superEasyTones()
+    test_seq_lengths, test_data_sequences = easiestTones()
     val_seq_lengths = data['valid']['sequence_lengths']
     val_data_sequences = data['valid']['sequences']
-    val_seq_lengths, val_data_sequences = superEasyTones()
+    val_seq_lengths, val_data_sequences = easiestTones()
     N_train_data = len(training_seq_lengths)
     N_train_time_slices = float(torch.sum(training_seq_lengths))
     N_mini_batches = int(N_train_data / args.mini_batch_size +
