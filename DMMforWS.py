@@ -396,17 +396,20 @@ def main(args):
 
     ## ドレミ
     def easyTones():
-        training_seq_lengths = torch.tensor([8]*1)
-        training_data_sequences = torch.zeros(1,8,88)
-        for i in range(1):
-            training_data_sequences[i][0][int(70-i*10)  ] = 1
-            training_data_sequences[i][1][int(70-i*10)+2] = 1
-            training_data_sequences[i][2][int(70-i*10)+4] = 1
-            training_data_sequences[i][3][int(70-i*10)+5] = 1
-            training_data_sequences[i][4][int(70-i*10)+7] = 1
-            training_data_sequences[i][5][int(70-i*10)+9] = 1
-            training_data_sequences[i][6][int(70-i*10)+11] = 1
-            training_data_sequences[i][7][int(70-i*10)+12] = 1
+        max = 70
+        interval = 10
+        N = 1
+        training_seq_lengths = torch.tensor([8]*N)
+        training_data_sequences = torch.zeros(N,8,88)
+        for i in range(N):
+            training_data_sequences[i][0][int(max-i*interval)  ] = 1
+            training_data_sequences[i][1][int(max-i*interval)+2] = 1
+            training_data_sequences[i][2][int(max-i*interval)+4] = 1
+            training_data_sequences[i][3][int(max-i*interval)+5] = 1
+            training_data_sequences[i][4][int(max-i*interval)+7] = 1
+            training_data_sequences[i][5][int(max-i*interval)+9] = 1
+            training_data_sequences[i][6][int(max-i*interval)+11] = 1
+            training_data_sequences[i][7][int(max-i*interval)+12] = 1
         return training_seq_lengths, training_data_sequences
     ## ドドド、レレレ
     def superEasyTones():
@@ -438,6 +441,7 @@ def main(args):
         fig = plt.figure()
         plt.rcParams["font.size"] = FS
         plt.plot(loss_list)
+        plt.ylim(bottom=0)
         plt.title("Wasserstein Loss")
         plt.xlabel("epoch", fontsize=FS)
         plt.ylabel("loss", fontsize=FS)
@@ -488,9 +492,10 @@ def main(args):
 
     ## 長さ最長129、例えば長さが60のやつは61~129はすべて0データ
     data = poly.load_data(poly.JSB_CHORALES)
-    training_seq_lengths = data['train']['sequence_lengths'][:3]
-    training_data_sequences = data['train']['sequences'][:3,:8]
+    training_seq_lengths = data['train']['sequence_lengths'][:1]
+    training_data_sequences = data['train']['sequences'][:1,:8]
     training_seq_lengths = torch.tensor([8,8,8])
+    training_seq_lengths = torch.tensor([8])
 
     if args.eas:
         # ## ドドド、レレレ、ミミミ、ドレミ
@@ -505,11 +510,13 @@ def main(args):
         training_seq_lengths, training_data_sequences = easiestTones()
 
 
-    test_seq_lengths = data['test']['sequence_lengths']
-    test_data_sequences = data['test']['sequences']
+    test_seq_lengths = data['test']['sequence_lengths'][:3]
+    test_seq_lengths = torch.tensor([8,8,8])
+    test_data_sequences = data['test']['sequences'][:3,:8]
     val_seq_lengths = data['valid']['sequence_lengths']
     val_data_sequences = data['valid']['sequences']
     N_train_data = len(training_seq_lengths)
+    # N_train_data = len(test_seq_lengths)
     N_train_time_slices = float(torch.sum(training_seq_lengths))
     N_mini_batches = int(N_train_data / args.mini_batch_size +
                         int(N_train_data % args.mini_batch_size > 0))
@@ -521,14 +528,14 @@ def main(args):
     n_eval_samples = 1
 
     # get the validation/test data ready for the dmm: pack into sequences, etc.
-    val_seq_lengths = rep(val_seq_lengths)
-    test_seq_lengths = rep(test_seq_lengths)
-    val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
-        torch.arange(n_eval_samples * val_data_sequences.shape[0]), rep(val_data_sequences),
-        val_seq_lengths, cuda=args.cuda)
-    test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
-        torch.arange(n_eval_samples * test_data_sequences.shape[0]), rep(test_data_sequences),
-        test_seq_lengths, cuda=args.cuda)
+    # val_seq_lengths = rep(val_seq_lengths)
+    # # test_seq_lengths = rep(test_seq_lengths)
+    # val_batch, val_batch_reversed, val_batch_mask, val_seq_lengths = poly.get_mini_batch(
+    #     torch.arange(n_eval_samples * val_data_sequences.shape[0]), rep(val_data_sequences),
+    #     val_seq_lengths, cuda=args.cuda)
+    # test_batch, test_batch_reversed, test_batch_mask, test_seq_lengths = poly.get_mini_batch(
+    #     torch.arange(n_eval_samples * test_data_sequences.shape[0]), rep(test_data_sequences),
+    #     test_seq_lengths, cuda=args.cuda)
 
 
 
@@ -579,6 +586,9 @@ def main(args):
             mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths \
                 = poly.get_mini_batch(mini_batch_indices, training_data_sequences,
                                         training_seq_lengths, cuda=args.cuda)
+            # mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths \
+            #     = poly.get_mini_batch(mini_batch_indices, test_data_sequences,
+            #                             test_seq_lengths, cuda=args.cuda)
 
             # reset gradients
             optimizer.zero_grad()
