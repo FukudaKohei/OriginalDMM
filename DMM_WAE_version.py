@@ -247,13 +247,13 @@ class Prior(nn.Module):
         self.use_cuda = use_cuda
         # if on gpu cuda-ize all PyTorch (sub)modules
 
-    def forward(self, mini_batch):
+    def forward(self, length, N_generate):
 
         # this is the number of time steps we need to process in the mini-batch
-        T_max = mini_batch.size(1)
+        T_max = length
 
         # set z_prev = z_q_0 to setup the recursive conditioning in q(z_t |...)
-        z_prev = self.z_q_0.expand(mini_batch.size(0), self.z_q_0.size(0))
+        z_prev = self.z_q_0.expand(N_generate, self.z_q_0.size(0))
         # if any(torch.isnan(z_prev.reshape(-1))):
         #     print("z_prev")
 
@@ -303,8 +303,49 @@ def D_KL(p_loc, q_loc, p_scale, q_scale):
     # (loc_q - loc_p)^T \Sigma_q (loc_q - loc_p)
     niji = torch.sum((q_loc-p_loc)*(q_loc-p_loc)/q_scale, dim=2)
     # KL-divergence
+    # KL = 0.5 *(torch.log(det_q_scale+1e-45) - torch.log(det_p_scale+1e-45) - dim + trace + niji)
     KL = 0.5 *(torch.log(det_q_scale) - torch.log(det_p_scale) - dim + trace + niji)
     return KL.sum() / (beats * songs)
+
+def D_Wass(p_loc, q_loc, p_scale, q_scale):
+    # locは平均, scaleは共分散行列とする。
+    # size = [曲数、拍数、88鍵]
+    beats = p_loc.size(1)
+    songs = p_loc.size(0)
+    # Determinant of Covariance Matrix
+    norm_2 = torch.sum((p_loc - q_loc)*(p_loc - q_loc), dim=2)
+    # Dimension of Maltivariate Normal Distribution
+    trace_p_scale = torch.sum(p_scale, dim=2)
+    trace_q_scale = torch.sum(q_scale, dim=2)
+    trace = torch.sum(torch.sqrt(p_scale*q_scale), dim=2)
+    # KL-divergence
+    Wass = torch.sqrt(norm_2 + trace_p_scale + trace_q_scale - 2 * trace)
+    return Wass.sum() / (beats * songs)
+
+def multi_normal_prob(loc,scale,x):
+    # locは平均, scaleは共分散行列, xはサンプルとする。
+    pi_2_d = torch.tensor(np.sqrt((np.pi * 2) ** loc.size(-1)))
+    det = torch.sum(scale, dim=2)
+    # mom = torch.sqrt(det) * pi_2_d
+    mom = torch.sqrt(det)
+    exp_arg = -0.5 * torch.sum((x-loc) * (x-loc) / scale, dim=2)
+    return torch.exp(exp_arg) / mom
+
+def D_JS_Monte(p_loc, q_loc, p_scale, q_scale, x_p, x_q):
+    N_data_inverse = 1/(x_p.size(0) + x_q.size(0))
+    length = x_p.size(1)
+    eps = 1e-40
+    p_prob_x_p = multi_normal_prob(p_loc,p_scale,x_p)
+    q_prob_x_p = multi_normal_prob(q_loc,q_scale,x_p)
+    p_prob_x_q = multi_normal_prob(p_loc,p_scale,x_q)
+    q_prob_x_q = multi_normal_prob(q_loc,q_scale,x_q)
+    m_prob_x_p = 0.5 * (p_prob_x_p + q_prob_x_p)
+    m_prob_x_q = 0.5 * (p_prob_x_q + q_prob_x_q)
+    KL_p_m = N_data_inverse * (p_prob_x_p*(torch.log(p_prob_x_p + eps) - torch.log(m_prob_x_p + eps)) + \
+        p_prob_x_q*(torch.log(p_prob_x_q + eps) - torch.log(m_prob_x_q + eps)))
+    KL_q_m = N_data_inverse * (q_prob_x_p*(torch.log(q_prob_x_p + eps) - torch.log(m_prob_x_p + eps)) + \
+        q_prob_x_q*(torch.log(q_prob_x_q + eps) - torch.log(m_prob_x_q + eps)))
+    return torch.sum(0.5 * (KL_p_m + KL_q_m) / length)
 
 def main(args):
 
@@ -473,20 +514,59 @@ def main(args):
 
             # reset gradients
             optimizer.zero_grad()
-
-            # generate mini batch from training mini batch
-            # NaN_detect(dmm, epoch, message="Before Generate")
-            pos_z, pos_z_loc, pos_z_scale = encoder(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths)
-            pri_z, pri_z_loc, pri_z_scale = prior(mini_batch)
-
             loss = 0
+            
+            N_repeat = 1
+            for i in range(N_repeat):
+                seiki = 1/N_repeat
+                # generate mini batch from training mini batch
+                pos_z, pos_z_loc, pos_z_scale = encoder(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths)
+                pri_z, pri_z_loc, pri_z_scale = prior(length = mini_batch.size(1), N_generate= mini_batch.size(0))
+        
+                # Regularizer (KL-diveergence(pos||pri))
+                # regularizer = seiki * D_Wass(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale)
+                # regularizer = seiki * D_KL(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale)
+                regularizer = seiki * D_JS_Monte(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale, pos_z, pri_z)
+
+                loss += args.lam * regularizer
             reconed_x = decoder(pos_z)
             # Reconstruction Error
             reconstruction_error = torch.norm(mini_batch - reconed_x, dim=2).sum()/mini_batch.size(0)/mini_batch.size(1)/mini_batch.size(2)
-            # Regularizer (KL-diveergence(pos||pri))
-            regularizer = D_KL(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale)
+            loss += reconstruction_error
+            
+            # # generate mini batch from training mini batch
+            # pos_z, pos_z_loc, pos_z_scale = encoder(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths)
+            # pri_z, pri_z_loc, pri_z_scale = prior(length = mini_batch.size(1), N_generate= mini_batch.size(0))
+    
+            # reconed_x = decoder(pos_z)
+            # # Reconstruction Error
+            # reconstruction_error = torch.norm(mini_batch - reconed_x, dim=2).sum()/mini_batch.size(0)/mini_batch.size(1)/mini_batch.size(2)
+            # # Regularizer (KL-diveergence(pos||pri))
+            # regularizer = D_Wass(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale)
 
-            loss += reconstruction_error + args.lam * regularizer
+            # loss += reconstruction_error + args.lam * regularizer
+
+            # # NaN detector
+            # if torch.isnan(loss):
+            #     saveDic = {
+            #     "optimizer":optimizer,
+            #     "mini_batch":mini_batch,
+            #     "Encoder_dic": encoder.state_dict,
+            #     "Prior_dic": prior.state_dict,
+            #     "Emitter_dic": decoder.state_dict,
+            #     }
+            #     torch.save(saveDic,os.path.join("saveData", now, "fail_DMM_dic"))
+            #     assert False, ("LOSS ia NaN!")
+
+
+            # saveDic = {
+            # "optimizer":optimizer,
+            # "mini_batch":mini_batch,
+            # "Encoder_dic": encoder.state_dict,
+            # "Prior_dic": prior.state_dict,
+            # "Emitter_dic": decoder.state_dict,
+            # }
+            # torch.save(saveDic,os.path.join("saveData", now, "DMM_dic"))
 
             # do an actual gradient step
             loss.backward()
@@ -538,6 +618,8 @@ def main(args):
 
             saveGraph(losses, recon_errors, now)
             saveDic = {
+                "optimizer":optimizer,
+                "mini_batch":mini_batch,
                 "Encoder_dic": encoder.state_dict,
                 "Prior_dic": prior.state_dict,
                 "Emitter_dic": decoder.state_dict,
@@ -559,7 +641,7 @@ if __name__ == '__main__':
     parser.add_argument('-nsongs', '--N-songs', type=int, default=10)
     parser.add_argument('-length', '--length', type=int, default=10)
     parser.add_argument('-ngen', '--N-generate', type=int, default=5)
-    parser.add_argument('-rcl', '--rnn-clip', type=float, default=None)
+    # parser.add_argument('-rcl', '--rnn-clip', type=float, default=None)
     parser.add_argument('--sin', action='store_true')
     parser.add_argument('--doremifasorasido', action='store_true')
     parser.add_argument('--dododorerere', action='store_true')
