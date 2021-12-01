@@ -151,7 +151,7 @@ class Combiner(nn.Module):
         return loc, scale
 
 class Encoder(nn.Module):
-    def __init__(self, input_dim=88, z_dim=100,rnn_dim=60, num_layers=1, rnn_dropout_rate=0.1,num_iafs=0, iaf_dim=50, use_cuda=False, rnn_check=False):
+    def __init__(self, input_dim=88, z_dim=100,rnn_dim=60, num_layers=1, rnn_dropout_rate=0.1,num_iafs=0, iaf_dim=50, N_z0 = 10, use_cuda=False, rnn_check=False):
         super().__init__()
         # instantiate PyTorch modules used in the model and guide below
         self.combiner = Combiner(z_dim, rnn_dim)
@@ -170,8 +170,17 @@ class Encoder(nn.Module):
         # (since for t = 1 there are no previous latents to condition on)
         self.z_0 = nn.Parameter(torch.zeros(z_dim))
         self.z_q_0 = nn.Parameter(torch.zeros(z_dim))
+
+        # randnでやっても失敗した。やっぱりいけた。学習率が問題？
+        # onesでやってみる 訓練データ1つならOK
+        # self.z_0 = nn.Parameter(torch.randn(z_dim))
+        # self.z_q_0 = nn.Parameter(torch.randn(z_dim))
+        
+        # self.z_0 = nn.Parameter(torch.randn(N_z0, z_dim))
+        # self.z_q_0 = nn.Parameter(torch.randn(N_z0, z_dim))
+
         # define a (trainable) parameter for the initial hidden state of the rnn
-        self.h_0 = nn.Parameter(torch.zeros(1, 1, rnn_dim))
+        self.h_0 = nn.Parameter(torch.randn(1, 1, rnn_dim))
 
         self.use_cuda = use_cuda
         # if on gpu cuda-ize all PyTorch (sub)modules
@@ -204,6 +213,9 @@ class Encoder(nn.Module):
 
         # set z_prev = z_q_0 to setup the recursive conditioning in q(z_t |...)
         z_prev = self.z_q_0.expand(mini_batch.size(0), self.z_q_0.size(0))
+        # z_prev = self.z_q_0.expand(mini_batch.size(0), self.z_q_0.size(0))
+        # z_prev = self.z_q_0
+
         # if any(torch.isnan(z_prev.reshape(-1))):
         #     print("z_prev")
 
@@ -213,7 +225,8 @@ class Encoder(nn.Module):
         for t in range(1,T_max+1):
             # the next two lines assemble the distribution q(z_t | z_{t-1}, x_{t:T})
             z_loc, z_scale = self.combiner(z_prev, rnn_output[:, t - 1, :])
-
+            if args.clip != None:
+                z_scale = torch.clamp(z_scale, min = args.clip)
             # Reparameterization Trick
             if self.use_cuda:
                 eps = torch.randn(z_loc.size()).cuda()
@@ -233,7 +246,7 @@ class Encoder(nn.Module):
         return z_container.transpose(0,1), z_loc_container.transpose(0,1), z_scale_container.transpose(0,1)
 
 class Prior(nn.Module):
-    def __init__(self, z_dim=100, transition_dim=200, use_cuda=False):
+    def __init__(self, z_dim=100, transition_dim=200,  N_z0 = 10, use_cuda=False):
         super().__init__()
         # instantiate PyTorch modules used in the model and guide below
         self.trans = GatedTransition(z_dim, transition_dim)
@@ -243,6 +256,12 @@ class Prior(nn.Module):
         # (since for t = 1 there are no previous latents to condition on)
         self.z_0 = nn.Parameter(torch.zeros(z_dim))
         self.z_q_0 = nn.Parameter(torch.zeros(z_dim))
+
+        # self.z_0 = nn.Parameter(torch.randn(z_dim))
+        # self.z_q_0 = nn.Parameter(torch.randn(z_dim))
+        
+        # self.z_0 = nn.Parameter(torch.randn(N_z0, z_dim))
+        # self.z_q_0 = nn.Parameter(torch.randn(N_z0, z_dim))
 
         self.use_cuda = use_cuda
         # if on gpu cuda-ize all PyTorch (sub)modules
@@ -254,6 +273,9 @@ class Prior(nn.Module):
 
         # set z_prev = z_q_0 to setup the recursive conditioning in q(z_t |...)
         z_prev = self.z_q_0.expand(N_generate, self.z_q_0.size(0))
+        # z_prev = self.z_q_0.expand(N_generate, self.z_q_0.size(0))
+        # z_prev = self.z_q_0
+
         # if any(torch.isnan(z_prev.reshape(-1))):
         #     print("z_prev")
 
@@ -263,6 +285,8 @@ class Prior(nn.Module):
         for t in range(1,T_max+1):
             # the next two lines assemble the distribution q(z_t | z_{t-1}, x_{t:T})
             z_loc, z_scale = self.trans(z_prev)
+            if args.clip != None:
+                z_scale = torch.clamp(z_scale, min = args.clip)
 
             # Reparameterization Trick
             if self.use_cuda:
@@ -341,11 +365,10 @@ def D_JS_Monte(p_loc, q_loc, p_scale, q_scale, x_p, x_q):
     q_prob_x_q = multi_normal_prob(q_loc,q_scale,x_q)
     m_prob_x_p = 0.5 * (p_prob_x_p + q_prob_x_p)
     m_prob_x_q = 0.5 * (p_prob_x_q + q_prob_x_q)
-    KL_p_m = N_data_inverse * (p_prob_x_p*(torch.log(p_prob_x_p + eps) - torch.log(m_prob_x_p + eps)) + \
-        p_prob_x_q*(torch.log(p_prob_x_q + eps) - torch.log(m_prob_x_q + eps)))
-    KL_q_m = N_data_inverse * (q_prob_x_p*(torch.log(q_prob_x_p + eps) - torch.log(m_prob_x_p + eps)) + \
-        q_prob_x_q*(torch.log(q_prob_x_q + eps) - torch.log(m_prob_x_q + eps)))
+    KL_p_m = N_data_inverse * (torch.log(p_prob_x_p + eps) - torch.log(m_prob_x_p + eps))
+    KL_q_m = N_data_inverse * (torch.log(q_prob_x_q + eps) - torch.log(m_prob_x_q + eps))
     return torch.sum(0.5 * (KL_p_m + KL_q_m) / length)
+
 
 def main(args):
 
@@ -372,7 +395,7 @@ def main(args):
         plt.plot(x, recon_data.detach().numpy(), label="Reconstructed data")
         # plt.ylim(bottom=0)
         plt.title("Sin Curves")
-        plt.ylim(top=3, bottom=-3)
+        plt.ylim(top=10, bottom=-10)
         plt.xlabel("time", fontsize=FS)
         plt.ylabel("y", fontsize=FS)
         plt.legend()
@@ -386,7 +409,7 @@ def main(args):
         plt.plot(x, gene_data.detach().numpy(), label="Generated data")
         # plt.ylim(bottom=0)
         plt.title("Sin Curves")
-        plt.ylim(top=3, bottom=-3)
+        plt.ylim(top=10, bottom=-10)
         plt.xlabel("time", fontsize=FS)
         plt.ylabel("y", fontsize=FS)
         plt.legend()
@@ -453,6 +476,9 @@ def main(args):
     if args.sin:
         training_data_sequences = musics.createSin_allChanged(args.N_songs, args.length)
         training_seq_lengths = torch.tensor([args.length]*args.N_songs)
+
+    training_data_sequences = musics.createNewTrainingData(args.N_songs, args.length)
+    training_seq_lengths = torch.tensor([args.length]*args.N_songs)
     data_dim = training_data_sequences.size(-1)
 
     N_train_data = len(training_seq_lengths)
@@ -460,10 +486,14 @@ def main(args):
     N_mini_batches = int(N_train_data / args.mini_batch_size +
                         int(N_train_data % args.mini_batch_size > 0))
 
-    encoder = Encoder(input_dim=training_data_sequences.size(-1), z_dim=100, rnn_dim=200)
+    z_dim = args.z_dim #100 #2
+    rnn_dim = args.rnn_dim #200 #30
+    transition_dim = args.transition_dim #200 #30
+    emission_dim = args.emission_dim #100 #30
+    encoder = Encoder(input_dim=training_data_sequences.size(-1), z_dim=z_dim, rnn_dim=rnn_dim, N_z0=args.N_songs)
     # encoder = Encoder(z_dim=100, rnn_dim=200)
-    prior = Prior(z_dim=100, transition_dim=200, use_cuda=args.cuda)
-    decoder = Emitter(input_dim=training_data_sequences.size(-1), z_dim=100, emission_dim=100, use_cuda=args.cuda)
+    prior = Prior(z_dim=z_dim, transition_dim=transition_dim, N_z0=args.N_songs, use_cuda=args.cuda)
+    decoder = Emitter(input_dim=training_data_sequences.size(-1), z_dim=z_dim, emission_dim=emission_dim, use_cuda=args.cuda)
 
     # Create optimizer algorithm
     # optimizer = optim.SGD(dmm.parameters(), lr=args.learning_rate)
@@ -524,15 +554,20 @@ def main(args):
                 pri_z, pri_z_loc, pri_z_scale = prior(length = mini_batch.size(1), N_generate= mini_batch.size(0))
         
                 # Regularizer (KL-diveergence(pos||pri))
-                # regularizer = seiki * D_Wass(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale)
+                regularizer = seiki * D_Wass(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale)
                 # regularizer = seiki * D_KL(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale)
-                regularizer = seiki * D_JS_Monte(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale, pos_z, pri_z)
+                # regularizer = seiki * D_JS_Monte(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale, pos_z, pri_z)
+                reconstruction_error = seiki * torch.norm(mini_batch - decoder(pos_z), dim=2).sum()/mini_batch.size(0)/mini_batch.size(1)/mini_batch.size(2)
 
-                loss += args.lam * regularizer
+                loss += args.lam * regularizer  + reconstruction_error
             reconed_x = decoder(pos_z)
             # Reconstruction Error
-            reconstruction_error = torch.norm(mini_batch - reconed_x, dim=2).sum()/mini_batch.size(0)/mini_batch.size(1)/mini_batch.size(2)
-            loss += reconstruction_error
+            # reconstruction_error = torch.norm(mini_batch - reconed_x, dim=2).sum()/mini_batch.size(0)/mini_batch.size(1)/mini_batch.size(2)
+            # loss += reconstruction_error
+
+            # # Covariance Penalty
+            # sumOfCovariance = torch.sum(pos_z_scale + pri_z_scale)
+            # loss -= 0.00007 * sumOfCovariance
             
             # # generate mini batch from training mini batch
             # pos_z, pos_z_loc, pos_z_scale = encoder(mini_batch, mini_batch_reversed, mini_batch_mask, mini_batch_seq_lengths)
@@ -641,8 +676,13 @@ if __name__ == '__main__':
     parser.add_argument('-nsongs', '--N-songs', type=int, default=10)
     parser.add_argument('-length', '--length', type=int, default=10)
     parser.add_argument('-ngen', '--N-generate', type=int, default=5)
+    parser.add_argument('-z', '--z-dim', type=int, default=100)
+    parser.add_argument('-rnn', '--rnn-dim', type=int, default=200)
+    parser.add_argument('-tra', '--transition-dim', type=int, default=200)
+    parser.add_argument('-emi', '--emission-dim', type=int, default=100)
     # parser.add_argument('-rcl', '--rnn-clip', type=float, default=None)
     parser.add_argument('--sin', action='store_true')
+    parser.add_argument('-clip', "--clip",type=float, default=None)
     parser.add_argument('--doremifasorasido', action='store_true')
     parser.add_argument('--dododorerere', action='store_true')
     parser.add_argument('--dodododododo', action='store_true')

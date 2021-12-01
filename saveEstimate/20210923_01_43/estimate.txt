@@ -1,0 +1,40 @@
+20210916_10_27clip1.0
+Entorpy = tensor(2564.3584, grad_fn=<AddBackward0>)
+How close to mini_batch = tensor(27.1132, grad_fn=<DivBackward0>)
+
+20210916_09_18clip0.5
+Entorpy = tensor(2891.4482, grad_fn=<AddBackward0>)
+How close to mini_batch = tensor(43.8328, grad_fn=<DivBackward0>)
+
+20210916_11_39clip0.1
+Entorpy = tensor(1960.9512, grad_fn=<AddBackward0>)
+How close to mini_batch = tensor(14.1507, grad_fn=<DivBackward0>)
+
+20210916_12_59clip0.05
+Entorpy = tensor(1903.8519, grad_fn=<AddBackward0>)
+How close to mini_batch = tensor(11.2645, grad_fn=<DivBackward0>)
+
+20210916_14_38clip0.0001
+Entorpy = tensor(1820.4089, grad_fn=<AddBackward0>)
+How close to mini_batch = tensor(5.0092, grad_fn=<DivBackward0>)
+
+20210916_10_27clip1.0
+Entorpy = tensor(2568.0210, grad_fn=<AddBackward0>)
+How close to mini_batch = tensor(26.4775, grad_fn=<DivBackward0>)
+
+20210916_09_18clip0.5
+Entorpy = tensor(2885.8091, grad_fn=<AddBackward0>)
+How close to mini_batch = tensor(44.3700, grad_fn=<DivBackward0>)
+
+20210916_11_39clip0.1
+Entorpy = tensor(1960.4243, grad_fn=<AddBackward0>)
+How close to mini_batch = tensor(13.9410, grad_fn=<DivBackward0>)
+
+20210916_12_59clip0.05
+Entorpy = tensor(1904.1262, grad_fn=<AddBackward0>)
+How close to mini_batch = tensor(11.3113, grad_fn=<DivBackward0>)
+
+20210916_14_38clip0.0001
+Entorpy = tensor(1820.4175, grad_fn=<AddBackward0>)
+How close to mini_batch = tensor(5.0148, grad_fn=<DivBackward0>)
+

@@ -152,10 +152,39 @@ def createSin_allChanged(N_data, length):
     # phase = torch.rand(N_data) * 2*np.pi
     phase = torch.zeros(N_data)
     # amplitude = torch.rand(N_data) * 3
-    amplitude = torch.ones(N_data) * 2
-    frequency = torch.rand(N_data) * 6*np.pi
+    # amplitude = torch.randn(N_data) * 10
+    # amplitude = torch.tensor([ 10-i for i in range(N_data)])
+    amplitude = torch.rand(N_data) * 10
+    # amplitude = torch.clamp(amplitude, min = 1.0)
+    # frequency = torch.rand(N_data) * 8*np.pi
+    frequency = torch.ones(N_data) * 2*np.pi
+    # torch.clamp(frequency, min = np.pi)
     interval = frequency / length
     return torch.tensor([[[amplitude[i] * torch.sin(interval[i] * j + phase[i]) + constant[i] ] for j in range(length)] for i in range(N_data)])
+
+# def createNewTrainingData(N_data, length):
+#     A = torch.randn(100,100) / 10
+#     B = torch.randn(100,100)
+#     C = torch.randn(100) /10
+#     x = torch.zeros(N_data, length, 1)
+#     for i in range(N_data):
+#         z = torch.zeros(100)
+#         for j in range(length-1):
+#             z = torch.mv(A, z) + torch.mv(B, torch.randn(100))
+#             x[i][j+1] = torch.dot(C, z)
+#     return x
+
+def createNewTrainingData(N_data, length):
+    A = torch.tensor([[0., 1.], [-1., 0.]])
+    B = torch.tensor([1., 1.])
+    C = torch.tensor([1., 1.])
+    x = torch.zeros(N_data, length, 1)
+    for i in range(N_data):
+        z = torch.zeros(2)
+        for j in range(length-1):
+            z = torch.mv(A, z) + B*torch.randn(1)
+            x[i][j+1] = torch.dot(C, z)
+    return x
 
 
 

@@ -1,0 +1,4 @@
+20210916_09_18clip0.5
+Entorpy = tensor(-543.8972, grad_fn=<DivBackward0>)
+How close to mini_batch = tensor(20.8691, grad_fn=<DivBackward0>)
+
