@@ -186,6 +186,20 @@ def createNewTrainingData(N_data, length):
             x[i][j+1] = torch.dot(C, z)
     return x
 
+def lorentz(init, length, T, p=10., r=28., b=8/3):
+    interval = T / length
+    pos = []
+    prev_pos = init
+    pos.append(prev_pos)
+    for i in range(length):
+        next_pos = torch.zeros(3)
+        next_pos[0] = prev_pos[0] + interval * (-p*(prev_pos[0] - prev_pos[1]))
+        next_pos[1] = prev_pos[1] + interval * (-prev_pos[0]*prev_pos[2] + r*prev_pos[0] - prev_pos[1])
+        next_pos[2] = prev_pos[2] + interval * (prev_pos[0]*prev_pos[1] - b*prev_pos[2])
+        pos.append(next_pos)
+        prev_pos = next_pos
+    pos = torch.stack(pos)
+    return pos
 
 
 # a = torch.tensor([ i for i in range(10)])
