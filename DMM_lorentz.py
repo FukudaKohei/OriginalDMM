@@ -56,12 +56,13 @@ class Emitter(nn.Module):
         if self.input_dim == 1:
             x = self.lin_hidden_to_input(h2)
         else:
-            ps = torch.sigmoid(self.lin_hidden_to_input(h2))
-            if self.use_cuda: 
-                eps = torch.rand(self.input_dim).cuda()
-            else : eps = torch.rand(self.input_dim)
-            appxm = torch.log(eps + 1e-20) - torch.log(1-eps + 1e-20) + torch.log(ps + 1e-20) - torch.log(1-ps + 1e-20)
-            x = torch.sigmoid(appxm)
+            # ps = torch.sigmoid(self.lin_hidden_to_input(h2))
+            # if self.use_cuda: 
+            #     eps = torch.rand(self.input_dim).cuda()
+            # else : eps = torch.rand(self.input_dim)
+            # appxm = torch.log(eps + 1e-20) - torch.log(1-eps + 1e-20) + torch.log(ps + 1e-20) - torch.log(1-ps + 1e-20)
+            # x = torch.sigmoid(appxm)
+            x = self.lin_hidden_to_input(h2)
         return x
 
 class GatedTransition(nn.Module):
@@ -248,7 +249,6 @@ def main(args):
         FS = 10
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
-        plt.rcParams["font.size"] = FS
         plt.plot(train_data[:,0], train_data[:,1], train_data[:,2] , label="Training data")
         plt.plot(recon_data.detach().numpy()[:,0], recon_data.detach().numpy()[:,1], recon_data.detach().numpy()[:,2] , label="Reconstructed data")
         plt.title("Lorentz Curves")
@@ -263,7 +263,7 @@ def main(args):
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
         plt.rcParams["font.size"] = FS
-        plt.plot(gene_data.detach().numpy()[:,0], gene_data.detach().numpy()[:,1], gene_data.detach().numpy()[:,2] , label="Reconstructed data")
+        plt.plot(gene_data.detach().numpy()[:,0], gene_data.detach().numpy()[:,1], gene_data.detach().numpy()[:,2] , label="Generated data")
         plt.title("Lorentz Curves")
         # plt.ylim(top=10, bottom=-10)
         # plt.xlabel("time", fontsize=FS)
@@ -303,7 +303,8 @@ def main(args):
     # optimizer = optim.SGD(dmm.parameters(), lr=args.learning_rate)
     # optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate, betas=(0.96, 0.999), weight_decay=2.0)
     params = list(encoder.parameters()) + list(prior.parameters()) + list(decoder.parameters()) 
-    optimizer = optim.Adam(params, lr=args.learning_rate)
+    optimizer = optim.SGD(params, lr=args.learning_rate)
+    # optimizer = optim.Adam(params, lr=args.learning_rate)
     # Add learning rate scheduler
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999) 
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 1.) 
