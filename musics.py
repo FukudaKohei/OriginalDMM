@@ -201,6 +201,34 @@ def lorentz(init, length, T, p=10., r=28., b=8/3):
     pos = torch.stack(pos)
     return pos
 
+def VanDelPol(init, length, T, eps=0.3):
+    interval = T / length
+    pos = []
+    prev_pos = init
+    pos.append(prev_pos)
+    for i in range(length):
+        next_pos = torch.zeros(2)
+        next_pos[0] = prev_pos[0] + interval * (prev_pos[1])
+        next_pos[1] = prev_pos[1] + interval * (-prev_pos[0] + eps*prev_pos[1]*(1 - prev_pos[0]*prev_pos[0]))
+        pos.append(next_pos)
+        prev_pos = next_pos
+    pos = torch.stack(pos)
+    return pos
+
+def Nonlinear(init, length, T):
+    interval = T / length
+    pos = []
+    prev_pos = init
+    pos.append(prev_pos)
+    for i in range(length):
+        next_pos = torch.zeros(1)
+        # next_pos[0] = prev_pos[0] + interval * (-prev_pos[0] * prev_pos[0] * prev_pos[0])
+        next_pos[0] = prev_pos[0] + interval * ( - prev_pos[0] * prev_pos[0])
+        pos.append(next_pos)
+        prev_pos = next_pos
+    pos = torch.stack(pos)
+    return pos
+
 
 # a = torch.tensor([ i for i in range(10)])
 # # print(createSin_phaseChanged(20,8).size())

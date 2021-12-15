@@ -230,12 +230,11 @@ def D_JS_Monte(p_loc, q_loc, p_scale, q_scale, x_p, x_q):
 
 
 def main(args):
-
     ## This func is for saving losses at final
     def saveGraph(loss_list, sub_error_list,now):
         FS = 10
         fig = plt.figure()
-        plt.rcParams["font.size"] = FS
+        # plt.rcParams["font.size"] = FS
         plt.plot(loss_list, label="LOSS")
         plt.plot(sub_error_list, label="Reconstruction Error")
         plt.ylim(bottom=0)
@@ -244,6 +243,7 @@ def main(args):
         plt.ylabel("loss", fontsize=FS)
         plt.legend()
         fig.savefig(os.path.join("saveData", now, "LOSS.png"))
+        plt.close()
 
     def saveReconSinGraph(train_data, recon_data, length, path, number):
         FS = 10
@@ -257,12 +257,13 @@ def main(args):
         # plt.ylabel("y", fontsize=FS)
         plt.legend()
         fig.savefig(os.path.join(path, "Reconstruction"+str(number)+".png"))
+        plt.close()
 
     def saveGeneSinGraph(gene_data, length, path, number):
         FS = 10
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
-        plt.rcParams["font.size"] = FS
+        # plt.rcParams["font.size"] = FS
         plt.plot(gene_data.detach().numpy()[:,0], gene_data.detach().numpy()[:,1], gene_data.detach().numpy()[:,2] , label="Generated data")
         plt.title("Lorentz Curves")
         # plt.ylim(top=10, bottom=-10)
@@ -270,7 +271,10 @@ def main(args):
         # plt.ylabel("y", fontsize=FS)
         plt.legend()
         fig.savefig(os.path.join(path, "Generation"+str(number)+".png"))
+        plt.close()
 
+    FS = 10
+    plt.rcParams["font.size"] = FS
 
     ## 長さ最長129、例えば長さが60のやつは61~129はすべて0データ
     data = poly.load_data(poly.JSB_CHORALES)
@@ -306,6 +310,7 @@ def main(args):
     optimizer = optim.SGD(params, lr=args.learning_rate)
     # optimizer = optim.Adam(params, lr=args.learning_rate)
     # Add learning rate scheduler
+    # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.999) 
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999) 
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 1.) 
     #1でもやってみる

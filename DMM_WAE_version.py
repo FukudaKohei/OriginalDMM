@@ -376,7 +376,7 @@ def main(args):
     def saveGraph(loss_list, sub_error_list,now):
         FS = 10
         fig = plt.figure()
-        plt.rcParams["font.size"] = FS
+        # plt.rcParams["font.size"] = FS
         plt.plot(loss_list, label="LOSS")
         plt.plot(sub_error_list, label="Reconstruction Error")
         plt.ylim(bottom=0)
@@ -385,35 +385,41 @@ def main(args):
         plt.ylabel("loss", fontsize=FS)
         plt.legend()
         fig.savefig(os.path.join("saveData", now, "LOSS.png"))
+        plt.close()
+
 
     def saveReconSinGraph(train_data, recon_data, length, path, number):
         FS = 10
         fig = plt.figure()
-        plt.rcParams["font.size"] = FS
+        # plt.rcParams["font.size"] = FS
         x = np.linspace(0, 2*np.pi, length)
         plt.plot(x, train_data, label="Training data")
         plt.plot(x, recon_data.detach().numpy(), label="Reconstructed data")
         # plt.ylim(bottom=0)
         plt.title("Sin Curves")
-        plt.ylim(top=10, bottom=-10)
+        # plt.ylim(top=10, bottom=-10)
         plt.xlabel("time", fontsize=FS)
         plt.ylabel("y", fontsize=FS)
         plt.legend()
         fig.savefig(os.path.join(path, "Reconstruction"+str(number)+".png"))
+        plt.close()
+
 
     def saveGeneSinGraph(gene_data, length, path, number):
         FS = 10
         fig = plt.figure()
-        plt.rcParams["font.size"] = FS
+        # plt.rcParams["font.size"] = FS
         x = np.linspace(0, 2*np.pi, length)
         plt.plot(x, gene_data.detach().numpy(), label="Generated data")
         # plt.ylim(bottom=0)
         plt.title("Sin Curves")
-        plt.ylim(top=10, bottom=-10)
+        # plt.ylim(top=10, bottom=-10)
         plt.xlabel("time", fontsize=FS)
         plt.ylabel("y", fontsize=FS)
         plt.legend()
         fig.savefig(os.path.join(path, "Generation"+str(number)+".png"))
+        plt.close()
+
 
     ## This func is for save generatedTones and trainingTones as MIDI
     def save_as_midi(song, path="", name="default.mid", BPM = 120, velocity = 100):
@@ -456,6 +462,8 @@ def main(args):
             save_as_midi(song=songs_list[Number], path=path, name="No%d_Gene.midi"%i)
             save_as_midi(song=mini_batch[Number], path=path, name="No%d_Tran.midi"%i)
 
+    FS = 10
+    plt.rcParams["font.size"] = FS
 
     ## 長さ最長129、例えば長さが60のやつは61~129はすべて0データ
     data = poly.load_data(poly.JSB_CHORALES)
@@ -478,6 +486,10 @@ def main(args):
         training_seq_lengths = torch.tensor([args.length]*args.N_songs)
 
     training_data_sequences = musics.createNewTrainingData(args.N_songs, args.length)
+    # traing_data =[]
+    # for i in range(args.N_songs):
+    #     traing_data.append(musics.Nonlinear(torch.randn(1), args.length, T = args.T))
+    # training_data_sequences = torch.stack(traing_data)
     training_seq_lengths = torch.tensor([args.length]*args.N_songs)
     data_dim = training_data_sequences.size(-1)
 
@@ -501,8 +513,8 @@ def main(args):
     params = list(encoder.parameters()) + list(prior.parameters()) + list(decoder.parameters()) 
     optimizer = optim.Adam(params, lr=args.learning_rate)
     # Add learning rate scheduler
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999) 
-    # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 1.) 
+    # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999) 
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 1.) 
     #1でもやってみる
 
     # make directory for Data
@@ -676,6 +688,7 @@ if __name__ == '__main__':
     parser.add_argument('-nsongs', '--N-songs', type=int, default=10)
     parser.add_argument('-length', '--length', type=int, default=10)
     parser.add_argument('-ngen', '--N-generate', type=int, default=5)
+    parser.add_argument('-t', '--T', type=int, default=10)
     parser.add_argument('-z', '--z-dim', type=int, default=100)
     parser.add_argument('-rnn', '--rnn-dim', type=int, default=200)
     parser.add_argument('-tra', '--transition-dim', type=int, default=200)
