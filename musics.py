@@ -174,7 +174,21 @@ def createSin_allChanged(N_data, length):
 #             x[i][j+1] = torch.dot(C, z)
 #     return x
 
+# def createNewTrainingData(N_data, length):
+#     A = torch.tensor([[0., 1.], [-1., 0.]])
+#     B = torch.tensor([1., 1.])
+#     C = torch.tensor([1., 1.])
+#     x = torch.zeros(N_data, length, 1)
+#     for i in range(N_data):
+#         z = torch.zeros(2)
+#         for j in range(length-1):
+#             z = torch.mv(A, z) + B*torch.randn(1)
+#             x[i][j+1] = torch.dot(C, z)
+#     return x
+
 def createNewTrainingData(N_data, length):
+    T = 10.
+    dt = T / length
     A = torch.tensor([[0., 1.], [-1., 0.]])
     B = torch.tensor([1., 1.])
     C = torch.tensor([1., 1.])
@@ -182,7 +196,8 @@ def createNewTrainingData(N_data, length):
     for i in range(N_data):
         z = torch.zeros(2)
         for j in range(length-1):
-            z = torch.mv(A, z) + B*torch.randn(1)
+            dot_z = torch.mv(A, z) + B*torch.randn(1)
+            z = z + dot_z * dt
             x[i][j+1] = torch.dot(C, z)
     return x
 
