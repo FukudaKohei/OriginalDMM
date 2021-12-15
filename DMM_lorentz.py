@@ -249,6 +249,9 @@ def main(args):
         FS = 10
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
+        ax.set_xlim(-25,25)
+        ax.set_ylim(-25,25)
+        ax.set_zlim(0,50)
         plt.plot(train_data[:,0], train_data[:,1], train_data[:,2] , label="Training data")
         plt.plot(recon_data.detach().numpy()[:,0], recon_data.detach().numpy()[:,1], recon_data.detach().numpy()[:,2] , label="Reconstructed data")
         plt.title("Lorentz Curves")
@@ -263,6 +266,9 @@ def main(args):
         FS = 10
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
+        ax.set_xlim(-25,25)
+        ax.set_ylim(-25,25)
+        ax.set_zlim(0,50)
         # plt.rcParams["font.size"] = FS
         plt.plot(gene_data.detach().numpy()[:,0], gene_data.detach().numpy()[:,1], gene_data.detach().numpy()[:,2] , label="Generated data")
         plt.title("Lorentz Curves")
