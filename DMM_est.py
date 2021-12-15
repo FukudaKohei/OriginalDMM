@@ -390,7 +390,8 @@ def saveReconSinGraph(train_data, recon_data, length, path, number, id):
     plt.plot(x, recon_data.detach().numpy(), label="Reconstructed data", color="orange")
     plt.grid()
     # plt.title("Sin Curves")
-    plt.ylim(top=10, bottom=-10)
+    # plt.ylim(top=10, bottom=-10)
+    plt.ylim(top=2.5, bottom=-2.5)
     plt.xlim(0, length)
     plt.gca().get_xaxis().set_major_locator(ticker.MaxNLocator(integer=True))
     # plt.xlabel("t", fontsize=15)
@@ -407,11 +408,12 @@ def saveGeneSinGraph(gene_data, length, path, number, id):
     # x = np.linspace(0, 2*np.pi, length)
     x = np.linspace(0, length, length)
     for i in range(len(gene_data)):
-        plt.plot(x, gene_data[i].detach().numpy(), label="Generated data" + str(i+1))
+        plt.plot(x, gene_data[i].detach().numpy(), "o-", label="Generated data" + str(i+1))
     plt.grid()
     # plt.ylim(bottom=0)
     # plt.title("Sin Curves")
     plt.ylim(top=10, bottom=-10)
+    plt.ylim(top=2.5, bottom=-2.5)
     plt.xlim(0, length)
     plt.gca().get_xaxis().set_major_locator(ticker.MaxNLocator(integer=True))
     # plt.xlabel("t", fontsize=15)
@@ -432,7 +434,8 @@ def saveTrainSinGraph(gene_data, length, path, number, id):
     plt.grid()
     # plt.ylim(bottom=0)
     # plt.title("Sin Curves")
-    plt.ylim(top=10, bottom=-10)
+    # plt.ylim(top=10, bottom=-10)
+    plt.ylim(top=2.5, bottom=-2.5)
     plt.xlim(0, length)
     plt.gca().get_xaxis().set_major_locator(ticker.MaxNLocator(integer=True))
     plt.xlabel("t", fontsize=12)
@@ -523,7 +526,7 @@ def main(args):
         for j in range(args.N_pics):
             saveReconSinGraph(mini_batch[j], reconed_x[j], pri_z.size(1), os.path.join(ppath,"Reconstruction"), j, args.date)
         saveGeneSinGraph(decoder(pri_z)[:3], pri_z.size(1), os.path.join(ppath,"Generation"), j, args.date)
-        saveTrainSinGraph(mini_batch, pri_z.size(1), os.path.join(ppath,"Training"), 1, args.date)
+        saveTrainSinGraph(mini_batch[:5], pri_z.size(1), os.path.join(ppath,"Training"), 1, args.date)
 
         # save args as TEXT
         # f = open(os.path.join("saveEstimate", now, 'estimate.txt'), 'a') # 書き込みモードで開く
