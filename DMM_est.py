@@ -454,6 +454,7 @@ def main(args):
     data_path = os.path.join("saveData", now)
     files = os.listdir(data_path)
     files_dir = [f for f in files if os.path.isdir(os.path.join(data_path, f))]
+    print(files_dir)
 
     # # save args as TEXT
     # f = open(os.path.join("saveEstimate", now, 'args.txt'), 'w') # 書き込みモードで開く
@@ -478,6 +479,8 @@ def main(args):
         encoder = Encoder(input_dim=1, z_dim=z_dim, rnn_dim=rnn_dim, N_z0=N_songs)
         prior = Prior(z_dim=z_dim, transition_dim=transition_dim,  N_z0=N_songs)
         decoder = Emitter(input_dim=1, z_dim=z_dim, emission_dim=emission_dim)
+        if files_dir[i] == "Epoch2000":
+            continue
         DMM_dics = torch.load(os.path.join(data_path, files_dir[i],"DMM_dic"))
         training_data_sequences = DMM_dics["mini_batch"]
         encoder.load_state_dict(DMM_dics["Encoder_dic"]())
