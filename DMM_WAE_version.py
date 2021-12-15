@@ -647,6 +647,17 @@ def main(args):
                 for i in range(len(mini_batch)):
                     saveReconSinGraph(mini_batch[i], reconed_x[i], args.length, path, i)
                     saveGeneSinGraph(decoder(pri_z)[i], args.length, path, i)
+                saveDic = {
+                    "optimizer":optimizer,
+                    "mini_batch":mini_batch,
+                    "Encoder_dic": encoder.state_dict,
+                    "Prior_dic": prior.state_dict,
+                    "Emitter_dic": decoder.state_dict,
+                    "epoch_times": times,
+                    "losses":losses
+                }
+                # torch.save(saveDic,os.path.join("saveData", now, "dic_Epoch%d"%(epoch+1)))
+                torch.save(saveDic,os.path.join(path, "DMM_dic"))
 
         if epoch == args.num_epochs-1:
             path = os.path.join("saveData", now, "Epoch%d"%args.num_epochs)
