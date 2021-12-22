@@ -279,6 +279,7 @@ class Prior(nn.Module):
         # if any(torch.isnan(z_prev.reshape(-1))):
         #     print("z_prev")
 
+        # z_container = torch.zoros()
         z_container = []
         z_loc_container = []
         z_scale_container = []

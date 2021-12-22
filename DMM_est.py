@@ -401,14 +401,16 @@ def saveReconSinGraph(train_data, recon_data, length, path, number, id):
     plt.close()
 
 def saveGeneSinGraph(gene_data, length, path, number, id):
-    FS = 15
-    fig = plt.figure(figsize=(5, 8))
+    FS = 12
+    # FS = 15
+    # fig = plt.figure(figsize=(5, 8))
+    fig = plt.figure(figsize=(6,3))
     # plt.figure(figsize=(5, 8))
     plt.rcParams["font.size"] = FS
     # x = np.linspace(0, 2*np.pi, length)
     x = np.linspace(0, length, length)
     for i in range(len(gene_data)):
-        plt.plot(x, gene_data[i].detach().numpy(), "o-", label="Generated data" + str(i+1))
+        plt.plot(x, gene_data[i].detach().numpy(), label="Generated data" + str(i+1))
     plt.grid()
     # plt.ylim(bottom=0)
     # plt.title("Sin Curves")
