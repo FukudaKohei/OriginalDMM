@@ -125,11 +125,11 @@ class Encoder(nn.Module):
         rnn_output, _ = self.rnn(mini_batch_reversed, h_0_contig)
         rnn_output = poly.pad_and_reverse(rnn_output, mini_batch_seq_lengths)
         z_prev = self.z_q_0.expand(mini_batch.size(0), self.z_q_0.size(0))
-        z_container = []
-        z_loc_container = []
-        z_scale_container = []
-        for t in range(1,T_max+1):
-            z_loc, z_scale = self.combiner(z_prev, rnn_output[:, t - 1, :])
+        z_container = torch.zeros(mini_batch.size(0), T_max, self.z_q_0.size(0))
+        z_loc_container = torch.zeros(mini_batch.size(0), T_max, self.z_q_0.size(0))
+        z_scale_container = torch.zeros(mini_batch.size(0), T_max, self.z_q_0.size(0))
+        for t in range(T_max):
+            z_loc, z_scale = self.combiner(z_prev, rnn_output[:, t, :])
             if args.clip != None:
                 z_scale = torch.clamp(z_scale, min = args.clip)
             if self.use_cuda:
@@ -137,14 +137,15 @@ class Encoder(nn.Module):
             else: eps = torch.randn(z_loc.size())
             z_t = z_loc + z_scale * eps
             z_prev = z_t
-            z_container.append(z_t)
-            z_loc_container.append(z_loc)
-            z_scale_container.append(z_scale)
+            z_container[:,t] = z_t
+            z_loc_container[:,t] = z_loc
+            z_scale_container[:,t] = z_scale
         
-        z_container = torch.stack(z_container)
-        z_loc_container = torch.stack(z_loc_container)
-        z_scale_container = torch.stack(z_scale_container)
-        return z_container.transpose(0,1), z_loc_container.transpose(0,1), z_scale_container.transpose(0,1)
+        # z_container = torch.stack(z_container)
+        # z_loc_container = torch.stack(z_loc_container)
+        # z_scale_container = torch.stack(z_scale_container)
+        # return z_container.transpose(0,1), z_loc_container.transpose(0,1), z_scale_container.transpose(0,1)
+        return z_container, z_loc_container, z_scale_container
 
 class Prior(nn.Module):
     def __init__(self, z_dim=100, transition_dim=200,  N_z0 = 10, use_cuda=False):
@@ -157,10 +158,10 @@ class Prior(nn.Module):
     def forward(self, length, N_generate):
         T_max = length
         z_prev = self.z_q_0.expand(N_generate, self.z_q_0.size(0))
-        z_container = []
-        z_loc_container = []
-        z_scale_container = []
-        for t in range(1,T_max+1):
+        z_container = torch.zeros(N_generate, T_max, self.z_q_0.size(0))
+        z_loc_container = torch.zeros(N_generate, T_max, self.z_q_0.size(0))
+        z_scale_container = torch.zeros(N_generate, T_max, self.z_q_0.size(0))
+        for t in range(T_max):
             z_loc, z_scale = self.trans(z_prev)
             if args.clip != None:
                 z_scale = torch.clamp(z_scale, min = args.clip)
@@ -169,14 +170,15 @@ class Prior(nn.Module):
             else: eps = torch.randn(z_loc.size())
             z_t = z_loc + z_scale * eps
             z_prev = z_t
-            z_container.append(z_t)
-            z_loc_container.append(z_loc)
-            z_scale_container.append(z_scale)
+            z_container[:,t] = z_t
+            z_loc_container[:,t] = z_loc
+            z_scale_container[:,t] = z_scale
         
-        z_container = torch.stack(z_container)
-        z_loc_container = torch.stack(z_loc_container)
-        z_scale_container = torch.stack(z_scale_container)
-        return z_container.transpose(0,1), z_loc_container.transpose(0,1), z_scale_container.transpose(0,1)
+        # z_container = torch.stack(z_container)
+        # z_loc_container = torch.stack(z_loc_container)
+        # z_scale_container = torch.stack(z_scale_container)
+        # return z_container.transpose(0,1), z_loc_container.transpose(0,1), z_scale_container.transpose(0,1)
+        return z_container, z_loc_container, z_scale_container
 
 def multi_normal_prob(loc,scale,x):
     pi_2_d = torch.tensor(np.sqrt((np.pi * 2) ** loc.size(-1)))
@@ -288,10 +290,7 @@ def main(args):
     training_data_sequences = data['train']['sequences'][:args.N_songs,:8]
     training_seq_lengths = torch.tensor([8]*args.N_songs)
 
-    traing_data = []
-    for i in range(args.N_songs):
-        traing_data.append(musics.lorentz(torch.randn(3), args.length, args.T))
-    training_data_sequences = torch.stack(traing_data)
+    training_data_sequences = musics.lorentz(torch.randn(args.N_songs,3), args.length, args.T)
     training_seq_lengths = torch.tensor([args.length]*args.N_songs)
     data_dim = training_data_sequences.size(-1)
 
@@ -401,6 +400,15 @@ def main(args):
             for i in range(len(mini_batch)):
                 saveReconSinGraph(mini_batch[i], reconed_x[i], args.length, path, i)
                 saveGeneSinGraph(decoder(pri_z)[i], args.length, path, i)
+            saveDic = {
+                "optimizer":optimizer,
+                "mini_batch":mini_batch,
+                "Encoder_dic": encoder.state_dict,
+                "Prior_dic": prior.state_dict,
+                "Emitter_dic": decoder.state_dict,
+            }
+            # torch.save(saveDic,os.path.join("saveData", now, "dic_Epoch%d"%(epoch+1)))
+            torch.save(saveDic,os.path.join(path, "DMM_dic"))
 
         if epoch == args.num_epochs-1:
             path = os.path.join("saveData", now, "Epoch%d"%args.num_epochs)

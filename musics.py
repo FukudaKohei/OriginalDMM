@@ -203,17 +203,12 @@ def createNewTrainingData(N_data, length):
 
 def lorentz(init, length, T, p=10., r=28., b=8/3):
     interval = T / length
-    pos = []
-    prev_pos = init
-    pos.append(prev_pos)
-    for i in range(length):
-        next_pos = torch.zeros(3)
-        next_pos[0] = prev_pos[0] + interval * (-p*(prev_pos[0] - prev_pos[1]))
-        next_pos[1] = prev_pos[1] + interval * (-prev_pos[0]*prev_pos[2] + r*prev_pos[0] - prev_pos[1])
-        next_pos[2] = prev_pos[2] + interval * (prev_pos[0]*prev_pos[1] - b*prev_pos[2])
-        pos.append(next_pos)
-        prev_pos = next_pos
-    pos = torch.stack(pos)
+    pos = torch.zeros(init.size(0), length, 3)
+    pos[:,0] = init
+    for i in range(1, length):
+        pos[:,i,0] = pos[:, i-1, 0] + interval * (-p*(pos[:, i-1, 0] - pos[:, i-1, 1]))
+        pos[:,i,1] = pos[:, i-1, 1] + interval * (-pos[:, i-1, 0]*pos[:, i-1, 2] + r*pos[:, i-1, 0] - pos[:, i-1, 1])
+        pos[:,i,2] = pos[:, i-1, 2] + interval * (pos[:, i-1, 0]*pos[:, i-1, 1] - b*pos[:, i-1, 2])
     return pos
 
 def VanDelPol(init, length, T, eps=0.3):
