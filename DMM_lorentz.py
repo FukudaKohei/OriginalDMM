@@ -6,12 +6,15 @@ import datetime
 import tqdm
 from os.path import exists
 import os
+import sys
 
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from pytorch_memlab import profile
+
 
 import pyro
 import pyro.contrib.examples.polyphonic_data_loader as poly
@@ -155,6 +158,7 @@ class Prior(nn.Module):
         self.z_q_0 = nn.Parameter(torch.zeros(z_dim))
         self.use_cuda = use_cuda
 
+    @profile
     def forward(self, length, N_generate):
         T_max = length
         z_prev = self.z_q_0.expand(N_generate, self.z_q_0.size(0))
@@ -386,7 +390,6 @@ def main(args):
 
             epoch_nll += loss
             epoch_recon_error += reconstruction_error
-        
         # report training diagnostics
         times.append(time.time())
         losses.append(epoch_nll)

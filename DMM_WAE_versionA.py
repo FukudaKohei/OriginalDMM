@@ -151,7 +151,7 @@ class Combiner(nn.Module):
         return loc, scale
 
 class Encoder(nn.Module):
-    def __init__(self, input_dim=88, z_dim=100,rnn_dim=60, num_layers=1, rnn_dropout_rate=0.1,num_iafs=0, iaf_dim=50, N_z0 = 10, use_cuda=False, rnn_check=False):
+    def __init__(self, input_dim=88, z_dim=100,rnn_dim=60, num_layers=1, rnn_dropout_rate=0.1,num_iafs=0, iaf_dim=50, N_z0 = 10, R = 2.0, use_cuda=False, rnn_check=False):
         super().__init__()
         # instantiate PyTorch modules used in the model and guide below
         self.combiner = Combiner(z_dim, rnn_dim)
@@ -169,7 +169,8 @@ class Encoder(nn.Module):
         # distributions p(z_1) and q(z_1)
         # (since for t = 1 there are no previous latents to condition on)
         self.z_0 = nn.Parameter(torch.zeros(z_dim))
-        self.z_q_0 = nn.Parameter(torch.zeros(z_dim))
+        # self.z_q_0 = nn.Parameter(torch.zeros(z_dim))
+        self.z_q_0 = nn.Parameter(torch.ones(z_dim))
 
         # randnでやっても失敗した。やっぱりいけた。学習率が問題？
         # onesでやってみる 訓練データ1つならOK
@@ -180,7 +181,7 @@ class Encoder(nn.Module):
         # self.z_q_0 = nn.Parameter(torch.randn(N_z0, z_dim))
 
         # define a (trainable) parameter for the initial hidden state of the rnn
-        self.h_0 = nn.Parameter(torch.randn(1, 1, rnn_dim))
+        self.h_0 = nn.Parameter(torch.zeros(1, 1, rnn_dim))
 
         self.use_cuda = use_cuda
         # if on gpu cuda-ize all PyTorch (sub)modules
@@ -271,7 +272,7 @@ class Encoder(nn.Module):
         # return z_container.transpose(0,1), z_loc_container.transpose(0,1), z_scale_container.transpose(0,1)
 
 class Prior(nn.Module):
-    def __init__(self, z_dim=100, transition_dim=200,  N_z0 = 10, use_cuda=False):
+    def __init__(self, z_dim=100, transition_dim=200,  N_z0 = 10, R = 2.0, use_cuda=False):
         super().__init__()
         # instantiate PyTorch modules used in the model and guide below
         # self.trans = GatedTransition(z_dim, transition_dim)
@@ -280,7 +281,9 @@ class Prior(nn.Module):
         # distributions p(z_1) and q(z_1)
         # (since for t = 1 there are no previous latents to condition on)
         self.z_0 = nn.Parameter(torch.zeros(z_dim))
-        self.z_q_0 = nn.Parameter(torch.zeros(z_dim))
+        self.z_dim= z_dim
+        # self.z_q_0 = nn.Parameter(torch.zeros(z_dim))
+        # self.z_q_0 = nn.Parameter(torch.ones(z_dim))*R
         self.T = 10.
         # self.z_0 = nn.Parameter(torch.randn(z_dim))
         # self.z_q_0 = nn.Parameter(torch.randn(z_dim))
@@ -288,6 +291,7 @@ class Prior(nn.Module):
         self.A = torch.tensor([[0., 1.], [-1., 0.]])
         self.B = torch.tensor([1., 1.])
         self.I = torch.tensor([[1., 0.], [0., 1.]])
+        self.R = R
         # self.z_0 = nn.Parameter(torch.randn(N_z0, z_dim))
         # self.z_q_0 = nn.Parameter(torch.randn(N_z0, z_dim))
 
@@ -298,15 +302,18 @@ class Prior(nn.Module):
         T_max = length
         dt = self.T / length
         IAdt = torch.tensor([[1., 0.], [0., 1.]])
-        z_prev = self.z_q_0.expand(N_generate, self.z_q_0.size(0))
-        z_container = torch.zeros(N_generate, T_max, self.z_q_0.size(0))
-        z_loc_container = torch.zeros(N_generate, T_max, self.z_q_0.size(0))
-        z_scale_container = torch.zeros(N_generate, T_max, self.z_q_0.size(0))
+        # z_prev = self.z_q_0.expand(N_generate, self.z_q_0.size(0))
+        phase = (torch.rand(N_generate)*4 - 2) *  3.14
+        z_prev = torch.tensor([[torch.cos(phase[i]), torch.cos(phase[i])] for i in range(N_generate) ])* self.R
+        z_0 = torch.clone(z_prev)
+        z_container = torch.zeros(N_generate, T_max, self.z_dim)
+        z_loc_container = torch.zeros(N_generate, T_max, self.z_dim)
+        z_scale_container = torch.zeros(N_generate, T_max, self.z_dim)
         for t in range(T_max):
-            z_scale_container[:,t] = z_scale_container[:,t-1] + (torch.mv(IAdt, dt*self.B)*torch.mv(IAdt, dt*self.B)).expand(N_generate, self.z_q_0.size(0))
+            z_scale_container[:,t] = z_scale_container[:,t-1] + (torch.mv(IAdt, dt*self.B)*torch.mv(IAdt, dt*self.B)).expand(N_generate, self.z_dim)
             IAdt = torch.mm(IAdt, self.I+self.A*dt)
-            z_loc_container[:,t] =  torch.mv(IAdt, self.z_q_0).expand(N_generate, self.z_q_0.size(0))
-            z_t = torch.zeros(N_generate,self.z_q_0.size(0))
+            z_loc_container[:,t] =  torch.mv(IAdt, z_0[0]).expand(N_generate, self.z_dim)
+            z_t = torch.zeros(N_generate,self.z_dim)
             for j in range(N_generate):
                 z_t[j] = torch.mv((self.I+self.A*dt), z_prev[j]) + self.B * dt * torch.randn(1)
             z_prev = z_t
@@ -556,17 +563,17 @@ def main(args):
     emission_dim = args.emission_dim #100 #30
     encoder = Encoder(input_dim=training_data_sequences.size(-1), z_dim=z_dim, rnn_dim=rnn_dim, N_z0=args.N_songs)
     # encoder = Encoder(z_dim=100, rnn_dim=200)
-    prior = Prior(z_dim=z_dim, transition_dim=transition_dim, N_z0=args.N_songs, use_cuda=args.cuda)
+    prior = Prior(z_dim=z_dim, transition_dim=transition_dim, N_z0=args.N_songs, use_cuda=args.cuda, R=args.R)
     decoder = Emitter(input_dim=training_data_sequences.size(-1), z_dim=z_dim, emission_dim=emission_dim, use_cuda=args.cuda)
 
     # Create optimizer algorithm
     # optimizer = optim.SGD(dmm.parameters(), lr=args.learning_rate)
     # optimizer = optim.Adam(dmm.parameters(), lr=args.learning_rate, betas=(0.96, 0.999), weight_decay=2.0)
-    params = list(encoder.parameters()) + list(prior.parameters()) + list(decoder.parameters()) 
+    params = list(encoder.parameters()) + list(prior.parameters()) + list(decoder.parameters())
     optimizer = optim.Adam(params, lr=args.learning_rate)
     # Add learning rate scheduler
-    # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999) 
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 1.) 
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 0.9999) 
+    # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, 1.)
     #1でもやってみる
 
     # make directory for Data
@@ -775,6 +782,7 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--num-epochs', type=int, default=5000)
     parser.add_argument('-lr', '--learning-rate', type=float, default=0.00001)
     parser.add_argument('-lam', '--lam', type=float, default=0.1)
+    parser.add_argument('-r', '--R', type=float, default=2.)
     parser.add_argument('-nsongs', '--N-songs', type=int, default=10)
     parser.add_argument('-length', '--length', type=int, default=10)
     parser.add_argument('-ngen', '--N-generate', type=int, default=5)

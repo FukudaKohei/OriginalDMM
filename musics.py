@@ -150,17 +150,24 @@ def createSin_allChanged(N_data, length):
     # constant = torch.randn(N_data)
     constant = torch.zeros(N_data)
     # phase = torch.rand(N_data) * 2*np.pi
-    phase = torch.zeros(N_data)
+    phase = torch.rand(N_data)
     # amplitude = torch.rand(N_data) * 3
     # amplitude = torch.randn(N_data) * 10
     # amplitude = torch.tensor([ 10-i for i in range(N_data)])
-    amplitude = torch.rand(N_data) * 10
+    amplitude = torch.ones(N_data) *3
     # amplitude = torch.clamp(amplitude, min = 1.0)
     # frequency = torch.rand(N_data) * 8*np.pi
     frequency = torch.ones(N_data) * 2*np.pi
     # torch.clamp(frequency, min = np.pi)
     interval = frequency / length
     return torch.tensor([[[amplitude[i] * torch.sin(interval[i] * j + phase[i]) + constant[i] ] for j in range(length)] for i in range(N_data)])
+
+def pertubate_data(data):
+    N, length, dim = data.size(0), data.size(1), data.size(2)
+    data = data.reshape(N * length * dim)
+    for dat in data:
+        dat += torch.randn(1)[0]
+    return data.reshape(N, length, dim)
 
 # def createNewTrainingData(N_data, length):
 #     A = torch.randn(100,100) / 10
@@ -188,17 +195,34 @@ def createSin_allChanged(N_data, length):
 
 def createNewTrainingData(N_data, length):
     T = 10.
+    R = 2.
     dt = T / length
     A = torch.tensor([[0., 1.], [-1., 0.]])
     B = torch.tensor([1., 1.])
     C = torch.tensor([1., 1.])
     x = torch.zeros(N_data, length, 1)
     for i in range(N_data):
-        z = torch.zeros(2)
-        for j in range(length-1):
+        phase = (torch.rand(1)*4 - 2) *  3.14
+        z = torch.tensor([torch.cos(phase), torch.sin(phase)])*R
+        for j in range(length):
             dot_z = torch.mv(A, z) + B*torch.randn(1)
             z = z + dot_z * dt
-            x[i][j+1] = torch.dot(C, z)
+            x[i][j] = torch.dot(C, z)
+    return x
+
+def bernoulli(N_data, length):
+    x = torch.zeros(N_data, length, 1)
+    prev = torch.rand(N_data,1)
+    for t in range(length):
+        a = prev <= 0.5
+        b = torch.logical_and(prev > 0.5, prev < 1.0)
+        c = prev == 1.
+        next = a*2*prev + b*(2*prev-1) + c*0.99
+        # print(next)
+        # if next == 1:
+        #     break
+        x[:,t,:] = next
+        prev = next
     return x
 
 def lorentz(init, length, T, p=10., r=28., b=8/3):

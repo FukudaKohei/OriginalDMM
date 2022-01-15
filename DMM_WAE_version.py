@@ -397,8 +397,11 @@ def main(args):
         plt.plot(x, train_data, label="Training data")
         plt.plot(x, recon_data.detach().numpy(), label="Reconstructed data")
         # plt.ylim(bottom=0)
-        plt.title("Sin Curves")
-        # plt.ylim(top=10, bottom=-10)
+        # plt.title("Sin Curves")
+        plt.title("Bernoulli Shift")
+        # plt.ylim(top=1., bottom=0.)
+        plt.ylim(top=18, bottom=-1)
+        # plt.ylim(top=3, bottom=-3)
         plt.xlabel("time", fontsize=FS)
         plt.ylabel("y", fontsize=FS)
         plt.legend()
@@ -413,8 +416,12 @@ def main(args):
         x = np.linspace(0, 2*np.pi, length)
         plt.plot(x, gene_data.detach().numpy(), label="Generated data")
         # plt.ylim(bottom=0)
-        plt.title("Sin Curves")
+        plt.title("Bernoulli Shift")
+        # plt.title("Sin Curves")
+        # plt.ylim(top=1., bottom=0.)
         # plt.ylim(top=10, bottom=-10)
+        # plt.ylim(top=3, bottom=-3)
+        plt.ylim(top=18, bottom=-1)
         plt.xlabel("time", fontsize=FS)
         plt.ylabel("y", fontsize=FS)
         plt.legend()
@@ -463,6 +470,76 @@ def main(args):
             save_as_midi(song=songs_list[Number], path=path, name="No%d_Gene.midi"%i)
             save_as_midi(song=mini_batch[Number], path=path, name="No%d_Tran.midi"%i)
 
+    def kernel__of_one_batch(Z_1, Z_2, sigma):
+        length, dim = Z_1.size(0), Z_1.size(1)
+        Z_1 = Z_1.reshape(length*dim)
+        Z_2 = Z_2.reshape(length*dim)
+        l2_norm = torch.norm(Z_1 - Z_2)*torch.norm(Z_1 - Z_2)
+        kernel = torch.exp(-(l2_norm /(2*sigma)))
+        return kernel
+
+    def kernel_of_different_batch(z_1, z_2, sigma):
+        N = z_1.size(0)
+        kernel = 0
+        for i in range(N):
+            for j in range(N):
+                kernel += kernel__of_one_batch(z_1[i], z_2[j], sigma=sigma)
+        return kernel
+
+    def kernel_of_same_batch(z_1, z_2, sigma):
+        N = z_1.size(0)
+        kernel = 0
+        for i in range(N):
+            for j in range(N):
+                if i != j:
+                    kernel += kernel__of_one_batch(z_1[i], z_2[j], sigma=sigma)
+        return kernel
+
+    def calc_kernel(z_1, z_2, sigma):
+        N = z_1.size(0)
+        kernel = 0
+        kernel += (1/(N*(N-1))) * (kernel_of_same_batch(z_1, z_1, sigma=sigma) + kernel_of_same_batch(z_2, z_2, sigma=sigma))
+        kernel += (-2/(N*N)) * kernel_of_different_batch(z_1, z_2, sigma=sigma)
+        return kernel
+    
+    # Inverse Multiquadratics kernel
+    S = torch.tensor([0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0])
+    def IMK_of_one_batch(z_1, z_2, S):
+        length, dim = z_1.size(0), z_1.size(1)
+        z_1 = z_1.reshape(length*dim)
+        z_2 = z_2.reshape(length*dim)
+        l2_norm = torch.norm(z_1 - z_2)*torch.norm(z_1 - z_2)
+        C = torch.rand(1)[0]*15.9 + 0.1
+        kernel = 0
+        for s in S:
+            kernel += (s*C)/(s*C + l2_norm)
+        return kernel
+
+    def IMK_of_different_batch(z_1, z_2, S):
+        N = z_1.size(0)
+        kernel = 0
+        for i in range(N):
+            for j in range(N):
+                kernel += IMK_of_one_batch(z_1[i], z_2[j], S)
+        return kernel
+
+    def IMK_of_same_batch(z_1, z_2, S):
+        N = z_1.size(0)
+        kernel = 0
+        for i in range(N):
+            for j in range(N):
+                if i != j:
+                    kernel += IMK_of_one_batch(z_1[i], z_2[j], S)
+        return kernel
+
+    def calc_IMK(z_1, z_2):
+        S = torch.tensor([0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0])
+        N = z_1.size(0)
+        kernel = 0
+        kernel += (1/(N*(N-1))) * (IMK_of_same_batch(z_1, z_1,S) + IMK_of_same_batch(z_2, z_2, S))
+        kernel += (-2/(N*N)) * IMK_of_different_batch(z_1, z_2, S)
+        return kernel
+
     FS = 10
     plt.rcParams["font.size"] = FS
 
@@ -486,7 +563,13 @@ def main(args):
         training_data_sequences = musics.createSin_allChanged(args.N_songs, args.length)
         training_seq_lengths = torch.tensor([args.length]*args.N_songs)
 
-    training_data_sequences = musics.createNewTrainingData(args.N_songs, args.length)
+    # training_data_sequences = musics.createNewTrainingData(args.N_songs, args.length)
+    training_data_sequences = musics.createSin_allChanged(args.N_songs, args.length)
+    line = torch.tensor([[0.0], [5.0], [10.0], [15.0]])
+    line = line.expand(args.N_songs, args.length,1)
+    training_data_sequences = musics.pertubate_data(line)
+    # training_data_sequences = musics.createSin_allChanged(args.N_songs, args.length)
+    # training_data_sequences = musics.bernoulli(args.N_songs, args.length)
     # traing_data =[]
     # for i in range(args.N_songs):
     #     traing_data.append(musics.Nonlinear(torch.randn(1), args.length, T = args.T))
@@ -570,6 +653,9 @@ def main(args):
                 regularizer = seiki * D_Wass(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale)
                 # regularizer = seiki * D_KL(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale)
                 # regularizer = seiki * D_JS_Monte(pos_z_loc, pri_z_loc, pos_z_scale, pri_z_scale, pos_z, pri_z)
+                # regularizer = seiki * calc_kernel(pos_z, pri_z, sigma=100)
+                # regularizer = seiki * calc_IMK(pos_z, pri_z)
+                # print(regularizer)
                 reconstruction_error = seiki * torch.norm(mini_batch - decoder(pos_z), dim=2).sum()/mini_batch.size(0)/mini_batch.size(1)/mini_batch.size(2)
 
                 loss += args.lam * regularizer  + reconstruction_error
