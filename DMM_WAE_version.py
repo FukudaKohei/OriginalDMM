@@ -731,9 +731,9 @@ def main(args):
                     save_as_midi(song=mini_batch[i], path=path, name="No%d_Real.midi"%i)
                     save_as_midi(song=gene_list[i], path=path, name="No%d_Gene.midi"%i)
             else:
-                for i in range(len(mini_batch)):
-                    saveReconSinGraph(mini_batch[i], reconed_x[i], args.length, path, i)
-                    saveGeneSinGraph(decoder(pri_z)[i], args.length, path, i)
+                # for i in range(len(mini_batch)):
+                #     saveReconSinGraph(mini_batch[i], reconed_x[i], args.length, path, i)
+                #     saveGeneSinGraph(decoder(pri_z)[i], args.length, path, i)
                 saveDic = {
                     "optimizer":optimizer,
                     "mini_batch":mini_batch,
@@ -780,7 +780,8 @@ def main(args):
                 "Prior_dic": prior.state_dict,
                 "Emitter_dic": decoder.state_dict,
                 "epoch_times": times,
-                "losses":losses
+                "losses":losses,
+                "recon_errors":recon_errors
             }
             # torch.save(saveDic,os.path.join("saveData", now, "dic_Epoch%d"%(epoch+1)))
             torch.save(saveDic,os.path.join("saveData", now, "DMM_dic"))
