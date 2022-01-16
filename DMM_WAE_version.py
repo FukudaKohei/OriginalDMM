@@ -565,7 +565,7 @@ def main(args):
 
     # training_data_sequences = musics.createNewTrainingData(args.N_songs, args.length)
     training_data_sequences = musics.createSin_allChanged(args.N_songs, args.length)
-    line = torch.tensor([[0.0], [5.0], [10.0], [15.0]])
+    line = torch.tensor([[0.0], [3.0], [6.0], [9.0]])
     line = line.expand(args.N_songs, args.length,1)
     training_data_sequences = musics.pertubate_data(line)
     # training_data_sequences = musics.createSin_allChanged(args.N_songs, args.length)
@@ -658,7 +658,7 @@ def main(args):
                 # print(regularizer)
                 reconstruction_error = seiki * torch.norm(mini_batch - decoder(pos_z), dim=2).sum()/mini_batch.size(0)/mini_batch.size(1)/mini_batch.size(2)
 
-                loss += args.lam * regularizer  + reconstruction_error
+                loss += (args.lam * regularizer  + reconstruction_error)/mini_batch.size(0)
             reconed_x = decoder(pos_z)
             # Reconstruction Error
             # reconstruction_error = torch.norm(mini_batch - reconed_x, dim=2).sum()/mini_batch.size(0)/mini_batch.size(1)/mini_batch.size(2)
@@ -711,7 +711,7 @@ def main(args):
             #         p.data.clamp_(-args.rnn_clip, args.rnn_clip)
 
             epoch_nll += loss
-            epoch_recon_error += reconstruction_error
+            epoch_recon_error += reconstruction_error/mini_batch.size(0)
         
         # report training diagnostics
         times.append(time.time())
@@ -721,7 +721,7 @@ def main(args):
         pbar.set_description("LOSS = %f " % epoch_nll)
         
         if epoch % args.checkpoint_freq == 0:
-            path = os.path.join("saveData", now, "Epoch%d"%epoch)
+            path = os.path.join("saveData", now, "Epoch%05d"%epoch)
             os.makedirs(path, exist_ok=True)
             if data_dim != 1:
                 reco_list = generate_Xs(reconed_x)
@@ -741,13 +741,14 @@ def main(args):
                     "Prior_dic": prior.state_dict,
                     "Emitter_dic": decoder.state_dict,
                     "epoch_times": times,
-                    "losses":losses
+                    "losses":losses,
+                    "recon_errors":recon_errors
                 }
                 # torch.save(saveDic,os.path.join("saveData", now, "dic_Epoch%d"%(epoch+1)))
                 torch.save(saveDic,os.path.join(path, "DMM_dic"))
 
         if epoch == args.num_epochs-1:
-            path = os.path.join("saveData", now, "Epoch%d"%args.num_epochs)
+            path = os.path.join("saveData", now, "Epoch%05d"%args.num_epochs)
             os.makedirs(path, exist_ok=True)
             if data_dim != 1:
                 reco_list = generate_Xs(reconed_x)
@@ -767,7 +768,8 @@ def main(args):
                     "Prior_dic": prior.state_dict,
                     "Emitter_dic": decoder.state_dict,
                     "epoch_times": times,
-                    "losses":losses
+                    "losses":losses,
+                    "recon_errors":recon_errors
                 }
                 # torch.save(saveDic,os.path.join("saveData", now, "dic_Epoch%d"%(epoch+1)))
                 torch.save(saveDic,os.path.join(path, "DMM_dic"))
